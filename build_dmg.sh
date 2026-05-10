@@ -2,7 +2,7 @@
 set -e
 
 APP_NAME="TranslateGemmaApp"
-VERSION=${1:-"1.1.1"}
+VERSION=${1:-"1.2.1-beta"}
 ARCH=$(uname -m)
 DMG_NAME="${APP_NAME}-${ARCH}-v${VERSION}.dmg"
 
@@ -22,13 +22,20 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 # 3. Copy binary
 cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 
-# 4. Create PkgInfo (optional but good)
-echo "APPL????" > "${APP_BUNDLE}/Contents/PkgInfo"
+# 4. Copy Info.plist
+cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 
-# 5. Add /Applications symlink for "Drag to Install"
+# 5. Ad-hoc sign with entitlements (important for Metal/JIT on Apple Silicon)
+ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"
+if [ -f "$ENTITLEMENTS" ]; then
+    echo "Signing with entitlements..."
+    codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign - "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+fi
+
+# 6. Add /Applications symlink for "Drag to Install"
 ln -s /Applications "${BUILD_DIR}/Applications"
 
-# 6. Create DMG
+# 7. Create DMG
 if [ -f "${DMG_NAME}" ]; then rm "${DMG_NAME}"; fi
 
 hdiutil create -volname "${APP_NAME}" -srcfolder "${BUILD_DIR}" -ov -format UDZO "${DMG_NAME}"

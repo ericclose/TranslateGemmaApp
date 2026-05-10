@@ -13,6 +13,8 @@ struct MainView: View {
     @State private var targetLanguage: String = "Chinese"
     @State private var showModelDashboard = false
     @State private var importedFileURL: URL? = nil
+    @State private var errorMessage: String? = nil
+    @State private var showErrorAlert = false
     
     let languages = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
     
@@ -149,6 +151,11 @@ struct MainView: View {
         .sheet(isPresented: $showModelDashboard) {
             ModelDashboardView(modelManager: modelManager)
         }
+        .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
+            Button("OK") { errorMessage = nil }
+        } message: { message in
+            Text(message)
+        }
         .onAppear {
             Task {
                 await modelManager.fetchCollectionModels()
@@ -192,6 +199,8 @@ struct MainView: View {
                 }
             } catch {
                 print("Translation error: \(error)")
+                errorMessage = error.localizedDescription
+                showErrorAlert = true
             }
         }
     }
