@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 struct MainView: View {
     @StateObject var modelManager = ModelManager()
     @StateObject var translationService = TranslationService()
+    let translationController = TranslationController()
     
     @AppStorage("selectedModelId") private var selectedModelId: String = ""
     
@@ -11,7 +12,7 @@ struct MainView: View {
     @State private var outputText: String = ""
     @State private var targetLanguage: String = "Chinese"
     @State private var showModelDashboard = false
-    @State private var isProcessingFile = false
+    @State private var importedFileURL: URL? = nil
     
     let languages = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
     
@@ -57,10 +58,19 @@ struct MainView: View {
                     // Input Area
                     VStack(alignment: .leading) {
                         HStack {
-                            Text("Source (Auto)")
+                            Text(importedFileURL != nil ? "Source (\(importedFileURL!.lastPathComponent))" : "Source (Auto)")
                                 .font(.caption).bold()
                                 .foregroundColor(.secondary)
                             Spacer()
+                            if importedFileURL != nil {
+                                Button("Clear") {
+                                    importedFileURL = nil
+                                    inputText = ""
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundColor(.red)
+                                .font(.caption)
+                            }
                             Button("Import File") {
                                 importFile()
                             }
@@ -114,7 +124,7 @@ struct MainView: View {
                 .padding(.horizontal)
                 
                 // Bottom Action
-                Button(action: translate) {
+                Button(action: translateAction) {
                     HStack {
                         if translationService.isTranslating {
                             ProgressView().controlSize(.small)
@@ -153,11 +163,10 @@ struct MainView: View {
         }
     }
     
-    func translate() {
+    func translateAction() {
         Task {
             let downloaded = modelManager.models.filter { $0.isDownloaded }
             
-            // Check for valid selected model or fallback
             let modelIdToUse: String
             if !selectedModelId.isEmpty && downloaded.contains(where: { $0.id == selectedModelId }) {
                 modelIdToUse = selectedModelId
@@ -171,7 +180,16 @@ struct MainView: View {
             
             do {
                 try await translationService.loadModel(modelId: modelIdToUse)
-                outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
+                
+                if let fileURL = importedFileURL {
+                    // Use TranslationController for file-based processing
+                    outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
+                        try await translationService.translate(text: text, sourceLang: nil, targetLang: targetLanguage)
+                    }
+                } else {
+                    // Just translate the editor text
+                    outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
+                }
             } catch {
                 print("Translation error: \(error)")
             }
@@ -183,6 +201,7 @@ struct MainView: View {
         panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
         if panel.runModal() == .OK {
             if let url = panel.url {
+                importedFileURL = url
                 inputText = (try? String(contentsOf: url)) ?? ""
             }
         }
@@ -190,6 +209,13 @@ struct MainView: View {
     
     func exportFile() {
         let panel = NSSavePanel()
+        // Suggest filename based on import or extension
+        if let originalURL = importedFileURL {
+            panel.nameFieldStringValue = "translated_" + originalURL.lastPathComponent
+        } else {
+            panel.nameFieldStringValue = "translated.txt"
+        }
+        
         if panel.runModal() == .OK {
             if let url = panel.url {
                 try? outputText.write(to: url, atomically: true, encoding: .utf8)

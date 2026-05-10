@@ -19,7 +19,9 @@ class ModelManager: ObservableObject {
     private let hub = HubApi()
     
     init() {
-        loadLocalModels()
+        Task {
+            await fetchCollectionModels()
+        }
     }
     
     func fetchCollectionModels() async {
@@ -41,7 +43,6 @@ class ModelManager: ObservableObject {
     func checkIfDownloaded(modelId: String) -> Bool {
         let repo = Hub.Repo(id: modelId)
         let path = hub.localRepoLocation(repo)
-        // Check if a major file exists, e.g. config.json
         let configPath = path.appendingPathComponent("config.json")
         return FileManager.default.fileExists(atPath: configPath.path)
     }
@@ -52,7 +53,6 @@ class ModelManager: ObservableObject {
         do {
             let repo = Hub.Repo(id: modelId)
             
-            // Perform real download using HubApi.snapshot
             _ = try await hub.snapshot(
                 from: repo,
                 progressHandler: { progress in
@@ -82,15 +82,8 @@ class ModelManager: ObservableObject {
         if FileManager.default.fileExists(atPath: path.path) {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
         } else {
-            // If not found, open the Application Support directory
             let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
             NSWorkspace.shared.open(appSupport)
-        }
-    }
-    
-    private func loadLocalModels() {
-        Task {
-            await fetchCollectionModels()
         }
     }
 }
