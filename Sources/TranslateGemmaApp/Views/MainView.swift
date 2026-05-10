@@ -5,6 +5,8 @@ struct MainView: View {
     @StateObject var modelManager = ModelManager()
     @StateObject var translationService = TranslationService()
     
+    @AppStorage("selectedModelId") private var selectedModelId: String = ""
+    
     @State private var inputText: String = ""
     @State private var outputText: String = ""
     @State private var targetLanguage: String = "Chinese"
@@ -21,12 +23,24 @@ struct MainView: View {
             
             VStack(spacing: 20) {
                 // Header
-                HStack {
+                HStack(spacing: 15) {
                     Text("TranslateGemma")
                         .font(.system(size: 24, weight: .bold, design: .rounded))
                         .foregroundStyle(LinearGradient(colors: [.blue, .purple], startPoint: .leading, endPoint: .trailing))
                     
                     Spacer()
+                    
+                    // Model Selector
+                    let downloadedModels = modelManager.models.filter { $0.isDownloaded }
+                    if !downloadedModels.isEmpty {
+                        Picker("", selection: $selectedModelId) {
+                            ForEach(downloadedModels) { model in
+                                Text(model.name).tag(model.id)
+                            }
+                        }
+                        .pickerStyle(.menu)
+                        .frame(width: 200)
+                    }
                     
                     Button(action: { showModelDashboard = true }) {
                         Image(systemName: "cpu")
@@ -128,8 +142,12 @@ struct MainView: View {
         .onAppear {
             Task {
                 await modelManager.fetchCollectionModels()
-                if modelManager.models.filter({ $0.isDownloaded }).isEmpty {
+                let downloaded = modelManager.models.filter { $0.isDownloaded }
+                
+                if downloaded.isEmpty {
                     showModelDashboard = true
+                } else if selectedModelId.isEmpty || !downloaded.contains(where: { $0.id == selectedModelId }) {
+                    selectedModelId = downloaded.first?.id ?? ""
                 }
             }
         }
@@ -137,14 +155,22 @@ struct MainView: View {
     
     func translate() {
         Task {
-            // Check for downloaded model
-            guard let model = modelManager.models.first(where: { $0.isDownloaded }) else {
+            let downloaded = modelManager.models.filter { $0.isDownloaded }
+            
+            // Check for valid selected model or fallback
+            let modelIdToUse: String
+            if !selectedModelId.isEmpty && downloaded.contains(where: { $0.id == selectedModelId }) {
+                modelIdToUse = selectedModelId
+            } else if let first = downloaded.first {
+                modelIdToUse = first.id
+                selectedModelId = first.id
+            } else {
                 showModelDashboard = true
                 return
             }
             
             do {
-                try await translationService.loadModel(modelId: model.id)
+                try await translationService.loadModel(modelId: modelIdToUse)
                 outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
             } catch {
                 print("Translation error: \(error)")
