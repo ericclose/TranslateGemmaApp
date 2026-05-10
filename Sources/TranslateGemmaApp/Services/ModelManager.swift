@@ -1,5 +1,5 @@
 import Foundation
-import Transformers
+import Hub
 import Combine
 
 struct ModelInfo: Identifiable {
