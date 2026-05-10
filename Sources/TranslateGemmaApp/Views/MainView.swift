@@ -288,6 +288,13 @@ struct ModelDashboardView: View {
                         }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
+                        
+                        Button(action: { modelManager.importLocalModel(modelId: model.id) }) {
+                            Image(systemName: "square.and.arrow.down.on.square")
+                                .help("Import local directory")
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, 5)
                     }
                 }
                 .padding(.vertical, 5)

@@ -35,15 +35,21 @@ public class TranslationService: ObservableObject {
         
         do {
             logger.info("Calling #huggingFaceLoadModelContainer...")
-            let container = try await #huggingFaceLoadModelContainer(configuration: configuration)
+            // Offload from main thread
+            let container = try await Task.detached(priority: .userInitiated) {
+                try await #huggingFaceLoadModelContainer(configuration: configuration)
+            }.value
+            
             await MainActor.run {
                 self.modelContainer = container
                 self.currentModelId = modelId
             }
             logger.info("Model loaded successfully: \(modelId)")
+            logToFile("Model loaded successfully: \(modelId)")
         } catch {
-            logger.error("Failed to load model \(modelId): \(error.localizedDescription)")
-            print("Failed to load model: \(error)")
+            let errorMsg = "Failed to load model \(modelId): \(error.localizedDescription)"
+            logger.error("\(errorMsg)")
+            logToFile("CRITICAL ERROR: \(errorMsg)")
             throw error
         }
     }
@@ -56,11 +62,23 @@ public class TranslationService: ObservableObject {
         
         logger.info("Starting translation for: \(text.prefix(50))...")
         
-        // Resource Diagnostic
-        if let metallibPath = Bundle.main.path(forResource: "default", ofType: "metallib") {
-            logToFile("Diagnostic: Found default.metallib at \(metallibPath)")
+        // Resource Diagnostic - Look in all possible bundles
+        var foundPath: String? = Bundle.main.path(forResource: "default", ofType: "metallib")
+        
+        if foundPath == nil {
+            // Fallback for command line or nested bundles
+            for bundle in Bundle.allBundles {
+                if let path = bundle.path(forResource: "default", ofType: "metallib") {
+                    foundPath = path
+                    break
+                }
+            }
+        }
+
+        if let path = foundPath {
+            logToFile("Diagnostic: Found default.metallib at \(path)")
         } else {
-            logToFile("Diagnostic WARNING: default.metallib NOT found in Bundle.main")
+            logToFile("Diagnostic WARNING: default.metallib NOT found in any bundle")
         }
         
         let sourceCode = getLanguageCode(sourceLang)
@@ -99,20 +117,30 @@ public class TranslationService: ObservableObject {
         
         do {
             logToFile("Starting generation with text length: \(text.count)")
-            // explicitly set repetitionPenalty to nil to avoid broadcast issues with Gemma models
-            // and add maxTokens to prevent runaway generation
             let parameters = GenerateParameters(maxTokens: 1024, repetitionPenalty: nil)
             
             logToFile("Calling container.generate...")
-            let stream = try await container.generate(input: input, parameters: parameters)
+            // Generation must happen off-main-thread
+            let stream = try await Task.detached(priority: .userInitiated) {
+                try await container.generate(input: input, parameters: parameters)
+            }.value
             
             logToFile("Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
+                    // Gemma 3 manual EOS check
+                    if text.contains("<end_of_turn>") || text.contains("<eos>") {
+                        logToFile("Detected EOS/Stop sequence. Breaking.")
+                        break
+                    }
+                    
+                    // Directly append to local variable
                     outputText += text
                 }
             }
+            
             logToFile("Translation finished. Result length: \(outputText.count)")
+            
         } catch {
             logToFile("CRITICAL ERROR during generation: \(error.localizedDescription)")
             logger.error("Translation error during generation: \(error.localizedDescription)")
@@ -151,21 +179,22 @@ public class TranslationService: ObservableObject {
     }
     
     private func logToFile(_ message: String) {
-        let logPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/TranslateGemma_Debug.log")
+        // Use NSLog so it shows up in Console.app and terminal even if files fail
+        NSLog("TranslateGemma: %@", message)
+        
+        // Try file backup to /tmp but don't crash if it fails
+        let logPath = URL(fileURLWithPath: "/tmp/TranslateGemma_Debug.log")
         let timestamp = Date().description
         let fullMessage = "[\(timestamp)] \(message)\n"
         
         if let data = fullMessage.data(using: .utf8) {
-            if FileManager.default.fileExists(atPath: logPath.path) {
-                if let fileHandle = try? FileHandle(forWritingTo: logPath) {
-                    fileHandle.seekToEndOfFile()
-                    fileHandle.write(data)
-                    fileHandle.closeFile()
-                }
+            if let fileHandle = try? FileHandle(forWritingTo: logPath) {
+                fileHandle.seekToEndOfFile()
+                fileHandle.write(data)
+                fileHandle.closeFile()
             } else {
-                try? data.write(to: logPath)
+                try? data.write(to: logPath, options: .atomic)
             }
         }
-        print(message)
     }
 }

@@ -31,5 +31,7 @@ struct Diagnostic {
         }
         
         print("--- Diagnostic Finished ---")
+        // Give background threads a moment to clean up before process exit
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
     }
 }
