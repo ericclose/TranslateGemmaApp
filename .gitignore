@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+
+
+# Swift / Swift Package Manager
+.build/
+Packages/
+.swiftpm/
+Package.resolved
+
+# Xcode
+build/
+DerivedData/
+*.xcodeproj/
+*.xcworkspace/
+!default.xcworkspace
+xcuserdata/
+*.xccheckout
+*.xcscheme
+!default.xcscheme
+*.xscheduleresults
+
+# Models and Large Files (TranslateGemmaApp specific)
+**/Models/
+*.bin
+*.gguf
+*.mlmodel
+*.weights
+*.h5
+*.pt
+*.safetensors
+
+# Logs
+*.log
+
+# Environment
+.env
+.env.local
+
+# Repos
+Repos/
