@@ -11,40 +11,48 @@ echo "Building ${APP_NAME} v${VERSION} for ${ARCH}..."
 # 1. Build release binary
 swift build -c release
 
-# 2. Prepare App Bundle structure
+# 2. Prepare App Bundle structure (Move this UP to avoid deleting compiled assets)
 BUILD_DIR="build/dmg_root"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
-
 rm -rf build/dmg_root
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
-# 3. Copy binary
+# 3. Manual Metal compilation for MLX
+echo "Compiling Metal kernels for MLX..."
+mkdir -p build/metal_objects
+# Find all metal files in mlx-swift checkout and compile to .air
+find .build/checkouts/mlx-swift -name "*.metal" | while read f; do
+    OBJ_NAME=$(basename "$f").air
+    if [ ! -f "build/metal_objects/$OBJ_NAME" ]; then
+        xcrun -sdk macosx metal -c "$f" -I .build/checkouts/mlx-swift/Source/Cmlx/mlx/ -o "build/metal_objects/$OBJ_NAME"
+    fi
+done
+# Link all .air files into a single .metallib
+xcrun -sdk macosx metallib build/metal_objects/*.air -o "${APP_BUNDLE}/Contents/Resources/default.metallib"
+
+# 4. Copy binary
 cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 
-# 4. Copy Info.plist and Resources
+# 5. Copy Info.plist and Resources
 cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 
 echo "Copying resource bundles from dependencies..."
-# Find all .bundle directories in the build folder and copy them to Resources
+# Find and copy other resource bundles (e.g. Transformers Hub)
 find ".build/release" -name "*.bundle" -exec cp -R {} "${APP_BUNDLE}/Contents/Resources/" \;
 
-# Specifically check for MLX metallib if it's not in a bundle (some versions)
-find ".build/release" -name "*.metallib" -exec cp {} "${APP_BUNDLE}/Contents/Resources/" \;
-
-# 5. Ad-hoc sign with entitlements (important for Metal/JIT on Apple Silicon)
+# 6. Ad-hoc sign with entitlements (important for Metal/JIT on Apple Silicon)
 ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"
 if [ -f "$ENTITLEMENTS" ]; then
     echo "Signing with entitlements..."
     codesign --force --entitlements "$ENTITLEMENTS" --sign - "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 fi
 
-# 6. Add /Applications symlink for "Drag to Install"
+# 7. Add /Applications symlink
 ln -s /Applications "${BUILD_DIR}/Applications"
 
-# 7. Create DMG
+# 8. Create DMG
 if [ -f "${DMG_NAME}" ]; then rm "${DMG_NAME}"; fi
-
 hdiutil create -volname "${APP_NAME}" -srcfolder "${BUILD_DIR}" -ov -format UDZO "${DMG_NAME}"
 
 echo "DMG created: ${DMG_NAME}"
