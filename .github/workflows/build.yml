@@ -27,9 +27,16 @@ jobs:
       - name: Create DMG
         run: |
           APP_NAME="TranslateGemmaApp"
+          VERSION=${{ env.VERSION }}
           ARCH=$(uname -m)
-          DMG_NAME="${APP_NAME}-${ARCH}-v${{ env.VERSION }}.dmg"
-          hdiutil create -volname "${APP_NAME}" -srcfolder build/TranslateGemmaApp.app -ov -format UDZO "${DMG_NAME}"
+          DMG_NAME="${APP_NAME}-${ARCH}-v${VERSION}.dmg"
+          
+          # Prepare folder for DMG
+          mkdir -p dmg_root
+          cp -R build/TranslateGemmaApp.app dmg_root/
+          ln -s /Applications dmg_root/Applications
+          
+          hdiutil create -volname "${APP_NAME}" -srcfolder dmg_root -ov -format UDZO "${DMG_NAME}"
           echo "DMG_PATH=${DMG_NAME}" >> $GITHUB_ENV
 
       - name: Release
