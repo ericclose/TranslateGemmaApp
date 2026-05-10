@@ -1,6 +1,5 @@
 import SwiftUI
 
-@main
 struct TranslateGemmaApp: App {
     var body: some Scene {
         WindowGroup {
@@ -10,3 +9,5 @@ struct TranslateGemmaApp: App {
         .windowToolbarStyle(.unified)
     }
 }
+
+TranslateGemmaApp.main()
