@@ -12,7 +12,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.2"),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "0.1.0"),
-        .package(url: "https://github.com/huggingface/swift-hub.git", from: "0.1.0"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
     ],
     targets: [
         .target(
@@ -21,7 +21,7 @@ let package = Package(
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
-                .product(name: "Hub", package: "swift-hub"),
+                .product(name: "Transformers", package: "swift-transformers"),
             ],
             resources: [
                 .process("Resources")
