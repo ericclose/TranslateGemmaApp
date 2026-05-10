@@ -11,17 +11,16 @@ echo "Building ${APP_NAME} v${VERSION} for ${ARCH}..."
 # 1. Build release binary
 swift build -c release
 
-# 2. Prepare App Bundle structure (Move this UP to avoid deleting compiled assets)
+# 2. Prepare App Bundle structure
 BUILD_DIR="build/dmg_root"
 APP_BUNDLE="${BUILD_DIR}/${APP_NAME}.app"
 rm -rf build/dmg_root
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
-# 3. Manual Metal compilation for MLX (Optimized with Parallelism)
+# 3. Manual Metal compilation for MLX
 echo "Compiling Metal kernels for MLX in parallel..."
 mkdir -p build/metal_objects
-# Use all available CPU cores to compile .metal files in parallel (robust version)
 find .build/checkouts/mlx-swift -name "*.metal" -print0 | xargs -0 -n 1 -P $(sysctl -n hw.ncpu) sh -c '
     FILE="$1"
     OBJ_NAME=$(basename "$FILE").air
@@ -29,8 +28,7 @@ find .build/checkouts/mlx-swift -name "*.metal" -print0 | xargs -0 -n 1 -P $(sys
         xcrun -sdk macosx metal -c "$FILE" -I .build/checkouts/mlx-swift/Source/Cmlx/mlx/ -o "build/metal_objects/$OBJ_NAME"
     fi
 ' --
-# Link all .air files into a single .metallib
-xcrun -sdk macosx metallib build/metal_objects/*.air -o "${APP_BUNDLE}/Contents/Resources/default.metallib"
+xcrun -sdk macosx metallib build/metal_objects/*.air -o "build/default.metallib"
 
 # 4. Copy binary
 cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
@@ -38,11 +36,15 @@ cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 # 5. Copy Info.plist and Resources
 cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 
-echo "Copying resource bundles from dependencies..."
-# Find and copy other resource bundles (e.g. Transformers Hub)
+echo "Copying resource bundles and injecting metallib..."
 find ".build/release" -name "*.bundle" -exec cp -R {} "${APP_BUNDLE}/Contents/Resources/" \;
 
-# 6. Ad-hoc sign with entitlements (important for Metal/JIT on Apple Silicon)
+# [IMPORTANT] Inject metallib into EVERY resource bundle to ensure MLX finds it
+# This covers cases where MLX is running inside a framework/library bundle
+cp "build/default.metallib" "${APP_BUNDLE}/Contents/Resources/default.metallib"
+find "${APP_BUNDLE}/Contents/Resources" -name "*.bundle" -type d -exec cp "build/default.metallib" {}/ \;
+
+# 6. Ad-hoc sign
 ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"
 if [ -f "$ENTITLEMENTS" ]; then
     echo "Signing with entitlements..."

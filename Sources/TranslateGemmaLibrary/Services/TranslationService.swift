@@ -56,6 +56,13 @@ public class TranslationService: ObservableObject {
         
         logger.info("Starting translation for: \(text.prefix(50))...")
         
+        // Resource Diagnostic
+        if let metallibPath = Bundle.main.path(forResource: "default", ofType: "metallib") {
+            logToFile("Diagnostic: Found default.metallib at \(metallibPath)")
+        } else {
+            logToFile("Diagnostic WARNING: default.metallib NOT found in Bundle.main")
+        }
+        
         let sourceCode = getLanguageCode(sourceLang)
         let targetCode = getLanguageCode(targetLang)
         
