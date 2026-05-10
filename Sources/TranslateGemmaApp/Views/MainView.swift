@@ -154,7 +154,7 @@ struct MainView: View {
     
     func importFile() {
         let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, .markdown]
+        panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
         if panel.runModal() == .OK {
             if let url = panel.url {
                 inputText = (try? String(contentsOf: url)) ?? ""
@@ -187,7 +187,7 @@ struct ModelDashboardView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding()
-            .background(VisualEffectView(material: .header, blendingMode: .withinWindow))
+            .background(VisualEffectView(material: .titlebar, blendingMode: .withinWindow))
             
             Divider()
             

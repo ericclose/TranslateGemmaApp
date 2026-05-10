@@ -1,6 +1,7 @@
 import Foundation
 import Hub
 import Combine
+import AppKit
 
 struct ModelInfo: Identifiable {
     let id: String
@@ -10,6 +11,7 @@ struct ModelInfo: Identifiable {
     var downloadProgress: Double = 0
 }
 
+@MainActor
 class ModelManager: ObservableObject {
     @Published var models: [ModelInfo] = []
     @Published var isDownloading = false
@@ -26,8 +28,6 @@ class ModelManager: ObservableObject {
     }
     
     func fetchCollectionModels() async {
-        // In a real app, we'd fetch from the collection API
-        // For now, we list the known TranslateGemma models
         let modelIds = [
             "mlx-community/translategemma-4b-it-4bit",
             "mlx-community/translategemma-12b-it-4bit",
@@ -40,9 +40,7 @@ class ModelManager: ObservableObject {
             fetched.append(ModelInfo(id: id, name: id.components(separatedBy: "/").last ?? id, size: "Varies", isDownloaded: isDownloaded))
         }
         
-        DispatchQueue.main.async {
-            self.models = fetched
-        }
+        self.models = fetched
     }
     
     func checkIfDownloaded(modelId: String) -> Bool {
@@ -51,36 +49,21 @@ class ModelManager: ObservableObject {
     }
     
     func downloadModel(modelId: String) async {
-        // Implement downloading using HubApi or URLSession
-        // This is a simplified version
-        DispatchQueue.main.async { self.isDownloading = true }
+        self.isDownloading = true
         
-        do {
-            // let model = try await hub.snapshot(repoId: modelId)
-            // progress tracking would be here
-            
-            // For now, simulate progress
-            for i in 1...10 {
-                try? await Task.sleep(nanoseconds: 500_000_000)
-                DispatchQueue.main.async {
-                    if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                        self.models[index].downloadProgress = Double(i) / 10.0
-                    }
-                }
+        // Simulate progress
+        for i in 1...10 {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+                self.models[index].downloadProgress = Double(i) / 10.0
             }
-            
-            // Mark as downloaded
-            DispatchQueue.main.async {
-                if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                    self.models[index].isDownloaded = true
-                    self.models[index].downloadProgress = 1.0
-                }
-                self.isDownloading = false
-            }
-        } catch {
-            print("Download failed: \(error)")
-            DispatchQueue.main.async { self.isDownloading = false }
         }
+        
+        if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+            self.models[index].isDownloaded = true
+            self.models[index].downloadProgress = 1.0
+        }
+        self.isDownloading = false
     }
     
     func revealInFinder(modelId: String) {

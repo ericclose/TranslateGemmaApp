@@ -76,7 +76,6 @@ class VTTParser: SubtitleParser {
         var paragraphs: [SubtitleParagraph] = []
         var currentTimes = ""
         var currentText: [String] = []
-        var header = ""
         
         var state: Int = 0 // 0: header, 1: looking for times, 2: text
         

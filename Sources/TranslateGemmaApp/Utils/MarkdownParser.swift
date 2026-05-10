@@ -11,11 +11,8 @@ class MarkdownParser {
         // Simple regex-based approach for demonstration
         // Better: Use a real MD parser, but here we'll skip code blocks and inline code
         var chunks: [MarkdownChunk] = []
-        
         let codeBlockRegex = try! NSRegularExpression(pattern: "```[\\s\\S]*?```", options: [])
-        let inlineCodeRegex = try! NSRegularExpression(pattern: "`[^`]+`", options: [])
         
-        var lastOffset = 0
         let nsString = content as NSString
         
         // Find code blocks
