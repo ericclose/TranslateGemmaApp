@@ -3,28 +3,28 @@ import Hub
 import Combine
 import AppKit
 
-struct ModelInfo: Identifiable {
-    let id: String
-    let name: String
-    let size: String
-    var isDownloaded: Bool = false
-    var downloadProgress: Double = 0
+public struct ModelInfo: Identifiable {
+    public let id: String
+    public let name: String
+    public let size: String
+    public var isDownloaded: Bool = false
+    public var downloadProgress: Double = 0
 }
 
 @MainActor
-class ModelManager: ObservableObject {
-    @Published var models: [ModelInfo] = []
-    @Published var isDownloading = false
+public class ModelManager: ObservableObject {
+    @Published public var models: [ModelInfo] = []
+    @Published public var isDownloading = false
     
     private let hub = HubApi()
     
-    init() {
+    public init() {
         Task {
             await fetchCollectionModels()
         }
     }
     
-    func fetchCollectionModels() async {
+    public func fetchCollectionModels() async {
         let modelSpecs = [
             ("mlx-community/translategemma-4b-it-4bit", "2.6 GB"),
             ("mlx-community/translategemma-12b-it-4bit", "7.5 GB"),
@@ -40,14 +40,14 @@ class ModelManager: ObservableObject {
         self.models = fetched
     }
     
-    func checkIfDownloaded(modelId: String) -> Bool {
+    public func checkIfDownloaded(modelId: String) -> Bool {
         let repo = Hub.Repo(id: modelId)
         let path = hub.localRepoLocation(repo)
         let configPath = path.appendingPathComponent("config.json")
         return FileManager.default.fileExists(atPath: configPath.path)
     }
     
-    func downloadModel(modelId: String) async {
+    public func downloadModel(modelId: String) async {
         self.isDownloading = true
         
         do {
@@ -75,7 +75,7 @@ class ModelManager: ObservableObject {
         self.isDownloading = false
     }
     
-    func revealInFinder(modelId: String) {
+    public func revealInFinder(modelId: String) {
         let repo = Hub.Repo(id: modelId)
         let path = hub.localRepoLocation(repo)
         

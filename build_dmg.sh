@@ -22,8 +22,15 @@ mkdir -p "${APP_BUNDLE}/Contents/Resources"
 # 3. Copy binary
 cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 
-# 4. Copy Info.plist
+# 4. Copy Info.plist and Resources
 cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
+
+echo "Copying resource bundles from dependencies..."
+# Find all .bundle directories in the build folder and copy them to Resources
+find ".build/release" -name "*.bundle" -exec cp -R {} "${APP_BUNDLE}/Contents/Resources/" \;
+
+# Specifically check for MLX metallib if it's not in a bundle (some versions)
+find ".build/release" -name "*.metallib" -exec cp {} "${APP_BUNDLE}/Contents/Resources/" \;
 
 # 5. Ad-hoc sign with entitlements (important for Metal/JIT on Apple Silicon)
 ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"

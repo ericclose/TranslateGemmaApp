@@ -1,12 +1,13 @@
 import Foundation
 
-class TranslationController {
+public class TranslationController {
+    public init() {}
     let srtParser = SRTParser()
     let vttParser = VTTParser()
     let assParser = ASSParser()
     let mdParser = MarkdownParser()
     
-    func processFile(url: URL, targetLang: String, translator: (String) async throws -> String) async throws -> String {
+    public func processFile(url: URL, targetLang: String, translator: (String) async throws -> String) async throws -> String {
         let content = try String(contentsOf: url)
         let ext = url.pathExtension.lowercased()
         

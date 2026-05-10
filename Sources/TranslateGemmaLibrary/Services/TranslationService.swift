@@ -10,18 +10,20 @@ import os
 
 private let logger = Logger(subsystem: "com.translategemma.app", category: "TranslationService")
 
-class TranslationService: ObservableObject {
-    @Published var isTranslating = false
-    @Published var progress: Double = 0
+public class TranslationService: ObservableObject {
+    @Published public var isTranslating = false
+    @Published public var progress: Double = 0
     
     private var modelContainer: ModelContainer?
     private var currentModelId: String?
     
-    init() {}
+    public init() {}
     
-    func loadModel(modelId: String) async throws {
-        // Configure GPU cache before loading any model
-        MLX.GPU.set(cacheLimit: 8 * 1024 * 1024 * 1024)
+    public func loadModel(modelId: String) async throws {
+        // Use the modern API to set memory limits
+        MLX.Memory.cacheLimit = 8 * 1024 * 1024 * 1024 // 8GB
+        
+        logToFile("--- Loading Model: \(modelId) ---")
         
         if currentModelId == modelId && modelContainer != nil { 
             logger.info("Model \(modelId) already loaded")
@@ -46,7 +48,7 @@ class TranslationService: ObservableObject {
         }
     }
     
-    func translate(text: String, sourceLang: String?, targetLang: String) async throws -> String {
+    public func translate(text: String, sourceLang: String?, targetLang: String) async throws -> String {
         guard let container = modelContainer else {
             logger.error("Attempted to translate without model loaded")
             throw NSError(domain: "TranslationService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
@@ -72,19 +74,23 @@ class TranslationService: ObservableObject {
         var outputText = ""
         
         do {
-            logger.info("Starting generation...")
+            logToFile("Starting generation with prompt length: \(prompt.count)")
             // explicitly set repetitionPenalty to nil to avoid broadcast issues with Gemma models
             // and add maxTokens to prevent runaway generation
             let parameters = GenerateParameters(maxTokens: 2048, repetitionPenalty: nil)
+            
+            logToFile("Calling container.generate...")
             let stream = try await container.generate(input: input, parameters: parameters)
             
+            logToFile("Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
                     outputText += text
                 }
             }
-            logger.info("Translation finished. Length: \(outputText.count)")
+            logToFile("Translation finished. Result length: \(outputText.count)")
         } catch {
+            logToFile("CRITICAL ERROR during generation: \(error.localizedDescription)")
             logger.error("Translation error during generation: \(error.localizedDescription)")
             print("Translation error: \(error)")
             await MainActor.run { self.isTranslating = false }
@@ -101,5 +107,24 @@ class TranslationService: ObservableObject {
         } else {
             return "Translate the following to \(targetLang):\n\(text)"
         }
+    }
+    
+    private func logToFile(_ message: String) {
+        let logPath = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Desktop/TranslateGemma_Debug.log")
+        let timestamp = Date().description
+        let fullMessage = "[\(timestamp)] \(message)\n"
+        
+        if let data = fullMessage.data(using: .utf8) {
+            if FileManager.default.fileExists(atPath: logPath.path) {
+                if let fileHandle = try? FileHandle(forWritingTo: logPath) {
+                    fileHandle.seekToEndOfFile()
+                    fileHandle.write(data)
+                    fileHandle.closeFile()
+                }
+            } else {
+                try? data.write(to: logPath)
+            }
+        }
+        print(message)
     }
 }
