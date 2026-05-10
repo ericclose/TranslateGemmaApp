@@ -81,7 +81,6 @@ class VTTParser: SubtitleParser {
         
         for (i, line) in lines.enumerated() {
             if i == 0 && line.starts(with: "WEBVTT") {
-                header = line
                 state = 1
                 continue
             }
