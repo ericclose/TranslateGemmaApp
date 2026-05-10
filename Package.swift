@@ -11,11 +11,11 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.2"),
-        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "0.1.0"),
-        .package(url: "https://github.com/huggingface/swift-transformers", from: "0.1.0"),
+        .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.31.3"),
+        .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.0"),
     ],
     targets: [
-        .target(
+        .executableTarget(
             name: "TranslateGemmaApp",
             dependencies: [
                 .product(name: "MLX", package: "mlx-swift"),
