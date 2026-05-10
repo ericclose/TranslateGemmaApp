@@ -17,7 +17,11 @@ class TranslationService: ObservableObject {
     private var modelContainer: ModelContainer?
     private var currentModelId: String?
     
-    init() {}
+    init() {
+        // Limit GPU cache to prevent out-of-memory crashes or system freezes
+        // Even with 32GB, MLX can sometimes be too aggressive
+        MLX.GPU.set(cacheLimit: 8 * 1024 * 1024 * 1024) // 8GB cache limit
+    }
     
     func loadModel(modelId: String) async throws {
         if currentModelId == modelId && modelContainer != nil { 
@@ -56,7 +60,10 @@ class TranslationService: ObservableObject {
         logger.info("Preparing input...")
         let input: LMInput
         do {
-            input = try await container.prepare(input: UserInput(prompt: .text(prompt)))
+            // Use the built-in template system instead of manual tags
+            // This is safer for Gemma 2 models which have complex templates
+            let messages = [["role": "user", "content": prompt]]
+            input = try await container.prepare(input: UserInput(messages: messages))
         } catch {
             logger.error("Failed to prepare input: \(error.localizedDescription)")
             throw error
@@ -67,8 +74,9 @@ class TranslationService: ObservableObject {
         
         do {
             logger.info("Starting generation...")
-            // explicitly set repetitionPenalty to nil to avoid broadcast issues with Gemma models in some MLX versions
-            let parameters = GenerateParameters(repetitionPenalty: nil)
+            // explicitly set repetitionPenalty to nil to avoid broadcast issues with Gemma models
+            // and add maxTokens to prevent runaway generation
+            let parameters = GenerateParameters(maxTokens: 2048, repetitionPenalty: nil)
             let stream = try await container.generate(input: input, parameters: parameters)
             
             for try await generation in stream {
@@ -89,18 +97,10 @@ class TranslationService: ObservableObject {
     }
     
     private func formatPrompt(text: String, sourceLang: String?, targetLang: String) -> String {
-        let instruction: String
         if let source = sourceLang {
-            instruction = "Translate the following from \(source) to \(targetLang):"
+            return "Translate the following from \(source) to \(targetLang):\n\(text)"
         } else {
-            instruction = "Translate the following to \(targetLang):"
+            return "Translate the following to \(targetLang):\n\(text)"
         }
-        
-        return """
-        <start_of_turn>user
-        \(instruction)
-        \(text)<end_of_turn>
-        <start_of_turn>model
-        """
     }
 }

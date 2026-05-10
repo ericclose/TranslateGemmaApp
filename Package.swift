@@ -28,6 +28,10 @@ let package = Package(
                 .product(name: "Hub", package: "swift-transformers"),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
             ],
+            exclude: [
+                "Resources/Info.plist",
+                "Resources/TranslateGemmaApp.entitlements"
+            ],
             resources: [
                 .process("Resources")
             ]
