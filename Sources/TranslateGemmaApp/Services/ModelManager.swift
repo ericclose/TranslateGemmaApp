@@ -17,13 +17,8 @@ class ModelManager: ObservableObject {
     @Published var isDownloading = false
     
     private let hub = HubApi()
-    private let modelsDir: URL
     
     init() {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        modelsDir = appSupport.appendingPathComponent("TranslateGemmaApp/Models")
-        try? FileManager.default.createDirectory(at: modelsDir, withIntermediateDirectories: true)
-        
         loadLocalModels()
     }
     
@@ -44,43 +39,58 @@ class ModelManager: ObservableObject {
     }
     
     func checkIfDownloaded(modelId: String) -> Bool {
-        let path = modelsDir.appendingPathComponent(modelId)
-        return FileManager.default.fileExists(atPath: path.path)
+        let repo = Hub.Repo(id: modelId)
+        let path = hub.localRepoLocation(repo)
+        // Check if a major file exists, e.g. config.json
+        let configPath = path.appendingPathComponent("config.json")
+        return FileManager.default.fileExists(atPath: configPath.path)
     }
     
     func downloadModel(modelId: String) async {
         self.isDownloading = true
         
-        // Simulate progress
-        for i in 1...10 {
-            try? await Task.sleep(nanoseconds: 500_000_000)
+        do {
+            let repo = Hub.Repo(id: modelId)
+            
+            // Perform real download using HubApi.snapshot
+            _ = try await hub.snapshot(
+                from: repo,
+                progressHandler: { progress in
+                    DispatchQueue.main.async {
+                        if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+                            self.models[index].downloadProgress = progress.fractionCompleted
+                        }
+                    }
+                }
+            )
+            
             if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                self.models[index].downloadProgress = Double(i) / 10.0
+                self.models[index].isDownloaded = true
+                self.models[index].downloadProgress = 1.0
             }
+        } catch {
+            print("Download failed: \(error)")
         }
         
-        // Mark as downloaded and create dummy directory for reveal in finder testing
-        let path = modelsDir.appendingPathComponent(modelId)
-        try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        
-        if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-            self.models[index].isDownloaded = true
-            self.models[index].downloadProgress = 1.0
-        }
         self.isDownloading = false
     }
     
     func revealInFinder(modelId: String) {
-        let path = modelsDir.appendingPathComponent(modelId)
+        let repo = Hub.Repo(id: modelId)
+        let path = hub.localRepoLocation(repo)
+        
         if FileManager.default.fileExists(atPath: path.path) {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
         } else {
-            // Fallback to models directory
-            NSWorkspace.shared.open(modelsDir)
+            // If not found, open the Application Support directory
+            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+            NSWorkspace.shared.open(appSupport)
         }
     }
     
     private func loadLocalModels() {
-        // Scan modelsDir for existing models
+        Task {
+            await fetchCollectionModels()
+        }
     }
 }
