@@ -56,14 +56,31 @@ public class TranslationService: ObservableObject {
         
         logger.info("Starting translation for: \(text.prefix(50))...")
         
-        let prompt = formatPrompt(text: text, sourceLang: sourceLang, targetLang: targetLang)
+        let sourceCode = getLanguageCode(sourceLang)
+        let targetCode = getLanguageCode(targetLang)
         
-        logger.info("Preparing input...")
+        let sCode = sourceCode ?? "auto"
+        let tCode = targetCode ?? "zh"
+        
+        logToFile("Using language codes: \(sCode) -> \(tCode)")
+        
+        // Gemma 3 TranslateGemma requires a specific structured content format
+        let content: [String: Any] = [
+            "type": "text",
+            "text": text,
+            "source_lang_code": sCode as Any,
+            "target_lang_code": tCode as Any
+        ]
+        
+        let messages: [[String: Any]] = [
+            [
+                "role": "user",
+                "content": [content]
+            ]
+        ]
+        
         let input: LMInput
         do {
-            // Use the built-in template system instead of manual tags
-            // This is safer for Gemma 2 models which have complex templates
-            let messages = [["role": "user", "content": prompt]]
             input = try await container.prepare(input: UserInput(messages: messages))
         } catch {
             logger.error("Failed to prepare input: \(error.localizedDescription)")
@@ -74,10 +91,10 @@ public class TranslationService: ObservableObject {
         var outputText = ""
         
         do {
-            logToFile("Starting generation with prompt length: \(prompt.count)")
+            logToFile("Starting generation with text length: \(text.count)")
             // explicitly set repetitionPenalty to nil to avoid broadcast issues with Gemma models
             // and add maxTokens to prevent runaway generation
-            let parameters = GenerateParameters(maxTokens: 2048, repetitionPenalty: nil)
+            let parameters = GenerateParameters(maxTokens: 1024, repetitionPenalty: nil)
             
             logToFile("Calling container.generate...")
             let stream = try await container.generate(input: input, parameters: parameters)
@@ -107,6 +124,23 @@ public class TranslationService: ObservableObject {
         } else {
             return "Translate the following to \(targetLang):\n\(text)"
         }
+    }
+    
+    private func getLanguageCode(_ language: String?) -> String? {
+        guard let language = language, language != "Auto" else { return nil }
+        
+        let mapping = [
+            "English": "en",
+            "Chinese": "zh",
+            "Japanese": "ja",
+            "French": "fr",
+            "German": "de",
+            "Spanish": "es",
+            "Korean": "ko",
+            "Russian": "ru"
+        ]
+        
+        return mapping[language] ?? language.lowercased()
     }
     
     private func logToFile(_ message: String) {

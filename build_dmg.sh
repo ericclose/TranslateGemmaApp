@@ -18,16 +18,17 @@ rm -rf build/dmg_root
 mkdir -p "${APP_BUNDLE}/Contents/MacOS"
 mkdir -p "${APP_BUNDLE}/Contents/Resources"
 
-# 3. Manual Metal compilation for MLX
-echo "Compiling Metal kernels for MLX..."
+# 3. Manual Metal compilation for MLX (Optimized with Parallelism)
+echo "Compiling Metal kernels for MLX in parallel..."
 mkdir -p build/metal_objects
-# Find all metal files in mlx-swift checkout and compile to .air
-find .build/checkouts/mlx-swift -name "*.metal" | while read f; do
-    OBJ_NAME=$(basename "$f").air
+# Use all available CPU cores to compile .metal files in parallel (robust version)
+find .build/checkouts/mlx-swift -name "*.metal" -print0 | xargs -0 -n 1 -P $(sysctl -n hw.ncpu) sh -c '
+    FILE="$1"
+    OBJ_NAME=$(basename "$FILE").air
     if [ ! -f "build/metal_objects/$OBJ_NAME" ]; then
-        xcrun -sdk macosx metal -c "$f" -I .build/checkouts/mlx-swift/Source/Cmlx/mlx/ -o "build/metal_objects/$OBJ_NAME"
+        xcrun -sdk macosx metal -c "$FILE" -I .build/checkouts/mlx-swift/Source/Cmlx/mlx/ -o "build/metal_objects/$OBJ_NAME"
     fi
-done
+' --
 # Link all .air files into a single .metallib
 xcrun -sdk macosx metallib build/metal_objects/*.air -o "${APP_BUNDLE}/Contents/Resources/default.metallib"
 

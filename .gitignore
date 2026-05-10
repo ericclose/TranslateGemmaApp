@@ -42,3 +42,8 @@ xcuserdata/
 
 # Repos
 Repos/
+# Build Products
+*.metallib
+*.dmg
+build/
+.build/
