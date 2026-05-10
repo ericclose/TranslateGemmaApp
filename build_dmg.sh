@@ -29,7 +29,7 @@ cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"
 if [ -f "$ENTITLEMENTS" ]; then
     echo "Signing with entitlements..."
-    codesign --force --options runtime --entitlements "$ENTITLEMENTS" --sign - "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+    codesign --force --entitlements "$ENTITLEMENTS" --sign - "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
 fi
 
 # 6. Add /Applications symlink for "Drag to Install"

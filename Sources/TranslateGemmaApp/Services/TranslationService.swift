@@ -17,13 +17,12 @@ class TranslationService: ObservableObject {
     private var modelContainer: ModelContainer?
     private var currentModelId: String?
     
-    init() {
-        // Limit GPU cache to prevent out-of-memory crashes or system freezes
-        // Even with 32GB, MLX can sometimes be too aggressive
-        MLX.GPU.set(cacheLimit: 8 * 1024 * 1024 * 1024) // 8GB cache limit
-    }
+    init() {}
     
     func loadModel(modelId: String) async throws {
+        // Configure GPU cache before loading any model
+        MLX.GPU.set(cacheLimit: 8 * 1024 * 1024 * 1024)
+        
         if currentModelId == modelId && modelContainer != nil { 
             logger.info("Model \(modelId) already loaded")
             return 
