@@ -28,16 +28,16 @@ class ModelManager: ObservableObject {
     }
     
     func fetchCollectionModels() async {
-        let modelIds = [
-            "mlx-community/translategemma-4b-it-4bit",
-            "mlx-community/translategemma-12b-it-4bit",
-            "mlx-community/translategemma-27b-it-4bit"
+        let modelSpecs = [
+            ("mlx-community/translategemma-4b-it-4bit", "2.6 GB"),
+            ("mlx-community/translategemma-12b-it-4bit", "7.5 GB"),
+            ("mlx-community/translategemma-27b-it-4bit", "16.2 GB")
         ]
         
         var fetched: [ModelInfo] = []
-        for id in modelIds {
+        for (id, size) in modelSpecs {
             let isDownloaded = checkIfDownloaded(modelId: id)
-            fetched.append(ModelInfo(id: id, name: id.components(separatedBy: "/").last ?? id, size: "Varies", isDownloaded: isDownloaded))
+            fetched.append(ModelInfo(id: id, name: id.components(separatedBy: "/").last ?? id, size: size, isDownloaded: isDownloaded))
         }
         
         self.models = fetched
@@ -59,6 +59,10 @@ class ModelManager: ObservableObject {
             }
         }
         
+        // Mark as downloaded and create dummy directory for reveal in finder testing
+        let path = modelsDir.appendingPathComponent(modelId)
+        try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+        
         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
             self.models[index].isDownloaded = true
             self.models[index].downloadProgress = 1.0
@@ -68,7 +72,12 @@ class ModelManager: ObservableObject {
     
     func revealInFinder(modelId: String) {
         let path = modelsDir.appendingPathComponent(modelId)
-        NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
+        if FileManager.default.fileExists(atPath: path.path) {
+            NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
+        } else {
+            // Fallback to models directory
+            NSWorkspace.shared.open(modelsDir)
+        }
     }
     
     private func loadLocalModels() {
