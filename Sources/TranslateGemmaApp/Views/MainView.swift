@@ -448,56 +448,149 @@ struct ModelDashboardView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            // Header
             HStack {
-                Text("Model Management")
-                    .font(.headline)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Model Library")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .foregroundColor(.primary)
+                    
+                    Text("Manage your local LLM weights")
+                        .font(.system(size: 13, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                }
+                
                 Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.defaultAction)
+                
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .buttonStyle(CircleGlassButtonStyle())
             }
-            .padding()
+            .padding(24)
             .background(.ultraThinMaterial)
             
-            Divider()
+            Divider().opacity(0.1)
             
-            List(modelManager.models) { model in
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.name)
-                            .font(.body.bold())
-                        Text(model.size)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
-                    if model.isDownloaded {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
-                        
-                        Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
-                            Image(systemName: "folder")
-                        }
-                        .buttonStyle(.plain)
-                    } else if modelManager.isDownloading && model.downloadProgress > 0 && model.downloadProgress < 1 {
-                        ProgressView(value: model.downloadProgress)
-                            .frame(width: 80)
-                    } else {
-                        Button("Download") {
-                            Task { await modelManager.downloadModel(modelId: model.id) }
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+            ScrollView {
+                VStack(spacing: 12) {
+                    ForEach(modelManager.models) { model in
+                        ModelRowView(model: model, modelManager: modelManager)
                     }
                 }
-                .padding(.vertical, 8)
+                .padding(20)
             }
-            .listStyle(.inset)
-            .scrollContentBackground(.hidden)
+            
+            Divider().opacity(0.1)
+            
+            // Footer Info
+            HStack {
+                Image(systemName: "folder.fill")
+                    .foregroundColor(.secondary)
+                Text(modelManager.currentHubPath)
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+                
+                Spacer()
+                
+                Button(action: { modelManager.selectCustomHubPath() }) {
+                    Text("Change Location")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .buttonStyle(.link)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+            .background(.ultraThinMaterial.opacity(0.5))
         }
-        .frame(width: 500, height: 400)
-        .background(.ultraThinMaterial)
+        .frame(width: 550, height: 500)
+        .background(VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow))
+    }
+}
+
+struct ModelRowView: View {
+    let model: ModelInfo
+    @ObservedObject var modelManager: ModelManager
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // Model Icon
+            ZStack {
+                Circle()
+                    .fill(model.isDownloaded ? Color.blue.opacity(0.1) : Color.primary.opacity(0.05))
+                    .frame(width: 44, height: 44)
+                
+                Image(systemName: model.isDownloaded ? "brain.head.profile" : "cloud.circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(model.isDownloaded ? .blue : .secondary)
+            }
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(model.name)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                
+                HStack(spacing: 8) {
+                    Text(model.size)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundColor(.secondary)
+                    
+                    if model.isDownloaded {
+                        Text("• Local")
+                            .font(.system(size: 12, weight: .medium, design: .rounded))
+                            .foregroundColor(.green.opacity(0.8))
+                    }
+                }
+            }
+            
+            Spacer()
+            
+            if model.isDownloaded {
+                Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundColor(.primary.opacity(0.1))
+                }
+                .buttonStyle(.plain)
+                .help("Show in Finder")
+            } else if modelManager.isDownloading && model.downloadProgress > 0 {
+                VStack(alignment: .trailing, spacing: 4) {
+                    ProgressView(value: model.downloadProgress)
+                        .progressViewStyle(.linear)
+                        .frame(width: 100)
+                        .tint(.blue)
+                    
+                    Text("\(Int(model.downloadProgress * 100))%")
+                        .font(.system(size: 10, weight: .bold, design: .rounded))
+                        .foregroundColor(.blue)
+                }
+            } else {
+                Button(action: { 
+                    Task { await modelManager.downloadModel(modelId: model.id) }
+                }) {
+                    Text("Download")
+                        .font(.system(size: 12, weight: .bold))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 6)
+                        .background(Capsule().fill(.primary))
+                        .foregroundColor(.white)
+                }
+                .buttonStyle(.plain)
+                .opacity(modelManager.isDownloading ? 0.5 : 1.0)
+                .disabled(modelManager.isDownloading)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(NSApp.effectiveAppearance.name == .darkAqua ? 0.05 : 0.4))
+                .shadow(color: Color.black.opacity(0.02), radius: 5, x: 0, y: 2)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
     }
 }
 
