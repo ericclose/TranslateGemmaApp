@@ -8,7 +8,7 @@ import Hub
 import HuggingFace
 import os
 
-private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "TranslationService")
+private let logger = AppLogger.service("TranslationService")
 
 @MainActor
 public class TranslationService: ObservableObject {
@@ -58,25 +58,8 @@ public class TranslationService: ObservableObject {
             throw NSError(domain: "TranslationService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
         }
         
-        logger.info("Starting translation for: \(text.prefix(50), privacy: .public)...")
-        
-        // Resource Diagnostic - Look in all possible bundles
-        var foundPath: String? = Bundle.main.path(forResource: "default", ofType: "metallib")
-        
-        if foundPath == nil {
-            // Fallback for command line or nested bundles
-            for bundle in Bundle.allBundles {
-                if let path = bundle.path(forResource: "default", ofType: "metallib") {
-                    foundPath = path
-                    break
-                }
-            }
-        }
-
-        if let path = foundPath {
-            logger.debug("Diagnostic: Found default.metallib at \(path, privacy: .public)")
-        } else {
-            logger.warning("Diagnostic WARNING: default.metallib NOT found in any bundle")
+        if let metallibURL = AppConfiguration.getMetallibURL() {
+            logger.debug("Active metallib URL: \(metallibURL.path, privacy: .public)")
         }
         
         let sourceCode = getLanguageCode(sourceLang)

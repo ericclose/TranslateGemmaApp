@@ -16,7 +16,7 @@ public class ModelManager: ObservableObject {
     @Published public var models: [ModelInfo] = []
     @Published public var isDownloading = false
     
-    private let hub = HubApi()
+    private let hub = AppConfiguration.hub
     
     public init() {
         Task {
@@ -46,22 +46,7 @@ public class ModelManager: ObservableObject {
     }
     
     public func checkIfDownloaded(modelId: String) -> Bool {
-        let repo = Hub.Repo(id: modelId)
-        let path = hub.localRepoLocation(repo)
-        
-        // Check for config.json
-        let configPath = path.appendingPathComponent("config.json")
-        guard FileManager.default.fileExists(atPath: configPath.path) else { return false }
-        
-        // Check for model weights (safetensors or index)
-        // We look for either model.safetensors or model.safetensors.index.json 
-        // as a proxy for the weights being present.
-        let safetensorsPath = path.appendingPathComponent("model.safetensors")
-        let indexLoaderPath = path.appendingPathComponent("model.safetensors.index.json")
-        
-        // For a more robust check, we could verify all shards, but this is a good start
-        return FileManager.default.fileExists(atPath: safetensorsPath.path) || 
-               FileManager.default.fileExists(atPath: indexLoaderPath.path)
+        return AppConfiguration.isModelFullyDownloaded(modelId: modelId)
     }
     
     public func downloadModel(modelId: String) async {
