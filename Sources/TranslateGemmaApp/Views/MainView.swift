@@ -1,6 +1,9 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import TranslateGemmaLibrary
+import os
+
+private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
 
 struct MainView: View {
     @StateObject var modelManager = ModelManager()
@@ -187,24 +190,18 @@ struct MainView: View {
             }
             
             do {
-                NSLog("TranslateGemma: UI calling translateAction for model: \(modelIdToUse)")
+                logger.debug("Translation requested for model: \(modelIdToUse, privacy: .public)")
                 try await translationService.loadModel(modelId: modelIdToUse)
-                NSLog("TranslateGemma: Model loaded successfully, starting translation...")
                 
                 if let fileURL = importedFileURL {
-                    // Use TranslationController for file-based processing
                     outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
                         try await translationService.translate(text: text, sourceLang: nil, targetLang: targetLanguage)
                     }
                 } else {
-                    // Just translate the editor text
-                    NSLog("TranslateGemma: Calling translationService.translate for text input...")
                     outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
                 }
-                NSLog("TranslateGemma: Translation task completed.")
             } catch {
-                NSLog("TranslateGemma: Caught translation error: \(error.localizedDescription)")
-                print("Translation error: \(error)")
+                logger.error("Translation error: \(error.localizedDescription, privacy: .public)")
                 errorMessage = error.localizedDescription
                 showErrorAlert = true
             }

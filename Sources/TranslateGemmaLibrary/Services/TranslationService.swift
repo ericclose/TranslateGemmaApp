@@ -8,8 +8,9 @@ import Hub
 import HuggingFace
 import os
 
-private let logger = Logger(subsystem: "com.translategemma.app", category: "TranslationService")
+private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "TranslationService")
 
+@MainActor
 public class TranslationService: ObservableObject {
     @Published public var isTranslating = false
     @Published public var progress: Double = 0
@@ -20,25 +21,23 @@ public class TranslationService: ObservableObject {
     public init() {}
     
     public func loadModel(modelId: String) async throws {
-        // Set cache limit to 60% of physical memory (e.g., ~19GB on a 32GB machine)
-        // This allows high-end machines to use their full potential while keeping low-end machines safe.
+        logger.info("🏗️ TranslationService: Entering loadModel for \(modelId, privacy: .public)")
+        
         let physicalMemory = ProcessInfo.processInfo.physicalMemory
         MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.6)
         
-        logToFile("--- Loading Model: \(modelId) ---")
+        logger.info("--- Loading Model: \(modelId, privacy: .public) ---")
         
         if currentModelId == modelId && modelContainer != nil { 
-            logger.info("Model \(modelId) already loaded")
+            logger.info("Model \(modelId, privacy: .public) already loaded")
             return 
         }
         
-        logger.info("Loading model: \(modelId)")
-        let configuration = ModelConfiguration(id: modelId)
-        
         do {
-            logger.info("Calling #huggingFaceLoadModelContainer...")
-            // Offload from main thread
-            let container = try await Task.detached(priority: .userInitiated) {
+            let configuration = ModelConfiguration(id: modelId)
+            
+            // Offline-first loading
+            let container = try await Task.detached(priority: .high) {
                 try await #huggingFaceLoadModelContainer(configuration: configuration)
             }.value
             
@@ -46,12 +45,9 @@ public class TranslationService: ObservableObject {
                 self.modelContainer = container
                 self.currentModelId = modelId
             }
-            logger.info("Model loaded successfully: \(modelId)")
-            logToFile("Model loaded successfully: \(modelId)")
         } catch {
             let errorMsg = "Failed to load model \(modelId): \(error.localizedDescription)"
-            logger.error("\(errorMsg)")
-            logToFile("CRITICAL ERROR: \(errorMsg)")
+            logger.error("\(errorMsg, privacy: .public)")
             throw error
         }
     }
@@ -62,7 +58,7 @@ public class TranslationService: ObservableObject {
             throw NSError(domain: "TranslationService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
         }
         
-        logger.info("Starting translation for: \(text.prefix(50))...")
+        logger.info("Starting translation for: \(text.prefix(50), privacy: .public)...")
         
         // Resource Diagnostic - Look in all possible bundles
         var foundPath: String? = Bundle.main.path(forResource: "default", ofType: "metallib")
@@ -78,9 +74,9 @@ public class TranslationService: ObservableObject {
         }
 
         if let path = foundPath {
-            logToFile("Diagnostic: Found default.metallib at \(path)")
+            logger.debug("Diagnostic: Found default.metallib at \(path, privacy: .public)")
         } else {
-            logToFile("Diagnostic WARNING: default.metallib NOT found in any bundle")
+            logger.warning("Diagnostic WARNING: default.metallib NOT found in any bundle")
         }
         
         let sourceCode = getLanguageCode(sourceLang)
@@ -89,7 +85,7 @@ public class TranslationService: ObservableObject {
         let sCode = sourceCode ?? "auto"
         let tCode = targetCode ?? "zh"
         
-        logToFile("Using language codes: \(sCode) -> \(tCode)")
+        logger.info("Using language codes: \(sCode, privacy: .public) -> \(tCode, privacy: .public)")
         
         // Gemma 3 TranslateGemma requires a specific structured content format
         // Some versions of MLXLLM prefer a single dictionary for content if it's text-only
@@ -117,10 +113,10 @@ public class TranslationService: ObservableObject {
         
         let input: LMInput
         do {
-            NSLog("TranslateGemma: Preparing structured input...")
+            logger.info("TranslateGemma: Preparing structured input...")
             input = try await container.prepare(input: UserInput(messages: structuredMessages))
         } catch {
-            NSLog("TranslateGemma: Structured input failed, trying plain text fallback...")
+            logger.info("TranslateGemma: Structured input failed, trying plain text fallback...")
             input = try await container.prepare(input: UserInput(messages: messages))
         }
         
@@ -128,43 +124,31 @@ public class TranslationService: ObservableObject {
         var outputText = ""
         
         do {
-            logToFile("Starting generation with text length: \(text.count)")
             let parameters = GenerateParameters(maxTokens: 1024, repetitionPenalty: nil)
-            
-            NSLog("TranslateGemma: Calling container.generate...")
+            logger.info("TranslateGemma: Calling container.generate...")
             // Generation must happen off-main-thread
             let stream = try await Task.detached(priority: .userInitiated) {
                 try await container.generate(input: input, parameters: parameters)
             }.value
             
-            NSLog("TranslateGemma: Iterating stream...")
+            logger.info("TranslateGemma: Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
-                    // Gemma 3 manual EOS check - more robust detection
+                    // Stop sequences detection
                     let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                     if stopSequences.contains(where: { text.contains($0) }) {
-                        logToFile("Detected EOS/Stop sequence in chunk. Breaking.")
                         break
                     }
                     
                     outputText += text
                     
-                    // Safety break for extremely long translations
-                    if outputText.count > text.count * 10 {
-                         if outputText.count > 10000 {
-                             logToFile("Safety limit reached. Breaking.")
-                             break
-                         }
+                    if outputText.count > 10000 {
+                        break
                     }
                 }
             }
-            
-            logToFile("Translation finished. Result length: \(outputText.count)")
-            
         } catch {
-            logToFile("CRITICAL ERROR during generation: \(error.localizedDescription)")
-            logger.error("Translation error during generation: \(error.localizedDescription)")
-            print("Translation error: \(error)")
+            logger.error("Generation error: \(error.localizedDescription, privacy: .public)")
             await MainActor.run { self.isTranslating = false }
             throw error
         }
@@ -198,26 +182,7 @@ public class TranslationService: ObservableObject {
         return mapping[language] ?? language.lowercased()
     }
     
-    private func logToFile(_ message: String) {
-        // Use NSLog for system-level logging
-        NSLog("TranslateGemma: %@", message)
-        
-        // Use a safe sandbox-friendly path for the debug log
-        let fileManager = FileManager.default
-        let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
-        let logPath = cachesURL.appendingPathComponent("TranslateGemma_Debug.log")
-        
-        let timestamp = Date().description
-        let fullMessage = "[\(timestamp)] \(message)\n"
-        
-        if let data = fullMessage.data(using: .utf8) {
-            if let fileHandle = try? FileHandle(forWritingTo: logPath) {
-                defer { try? fileHandle.close() }
-                fileHandle.seekToEndOfFile()
-                fileHandle.write(data)
-            } else {
-                try? data.write(to: logPath, options: .atomic)
-            }
-        }
+    private func log(message: String, type: OSLogType = .default) {
+        logger.log(level: type, "\(message, privacy: .public)")
     }
 }

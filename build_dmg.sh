@@ -68,14 +68,19 @@ cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 # Inject the chosen version into the bundle's Info.plist
 plutil -replace CFBundleShortVersionString -string "$VERSION" "${APP_BUNDLE}/Contents/Info.plist"
 cp "build/default.metallib" "${APP_BUNDLE}/Contents/Resources/"
+# MLX expects it inside a specific bundle name defined in its Package.swift
+MLX_BUNDLE="${APP_BUNDLE}/Contents/Resources/mlx-swift_Cmlx.bundle"
+mkdir -p "$MLX_BUNDLE"
+cp "build/default.metallib" "$MLX_BUNDLE/"
+# Keep a fallback copy alongside binary just in case
+cp "build/default.metallib" "${APP_BUNDLE}/Contents/MacOS/"
 
-# 4.1: Sandbox Hardening - Remove Xcode-specific RPATHs that cause crashes
-echo "🧹 Step 4.1: Cleaning up RPATHs for Sandbox compliance..."
-# We remove the common Xcode Swift compatibility paths that break sandbox
+# 4.1: Sandbox Hardening - Remove Xcode-specific RPATHs (Even if sandbox is disabled, this is good practice)
+echo "🧹 Step 4.1: Cleaning up RPATHs..."
 XCODE_SWIFT_PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx"
 install_name_tool -delete_rpath "$XCODE_SWIFT_PATH" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
 
-# 4.2: Copy auxiliary bundles (e.g. Transformers/Hub resources)
+# 4.2: Copy auxiliary bundles
 cp -r .build/release/*.bundle "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
 
 if [ ! -f "${APP_BUNDLE}/Contents/Resources/default.metallib" ]; then
@@ -84,13 +89,22 @@ if [ ! -f "${APP_BUNDLE}/Contents/Resources/default.metallib" ]; then
 fi
 record_step "Resource Bundling & Injection" "$S4_START"
 
-# 5. Deep Sign the entire bundle
-echo "🔏 Step 5: Performing Deep Recursive Signing..."
+# 5. Layered Code Signing (Hardened Runtime)
+echo "🔏 Step 5: Performing Layered Code Signing..."
 S5_START=$(get_time)
 ENTITLEMENTS="Sources/TranslateGemmaApp/Resources/TranslateGemmaApp.entitlements"
 if [ -f "$ENTITLEMENTS" ]; then
+    # 5.1: Sign internal resources and auxiliary bundles
     codesign --force --sign - "${APP_BUNDLE}/Contents/Resources/default.metallib"
-    codesign --force --entitlements "$ENTITLEMENTS" --timestamp --options runtime --sign - "${APP_BUNDLE}"
+    codesign --force --sign - "${APP_BUNDLE}/Contents/MacOS/default.metallib"
+    codesign --force --sign - "${APP_BUNDLE}/Contents/Resources/mlx-swift_Cmlx.bundle/default.metallib"
+    find "${APP_BUNDLE}/Contents/Resources" -name "*.bundle" -exec codesign --force --sign - --options runtime {} \; 2>/dev/null || true
+    
+    # 5.2: Sign the main binary explicitly with entitlements
+    codesign --force --sign - --options runtime --entitlements "$ENTITLEMENTS" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}"
+    
+    # 5.3: Sign the entire app bundle deeply
+    codesign --force --entitlements "$ENTITLEMENTS" --timestamp --options runtime --deep --sign - "${APP_BUNDLE}"
 fi
 record_step "Code Signing (Deep)" "$S5_START"
 

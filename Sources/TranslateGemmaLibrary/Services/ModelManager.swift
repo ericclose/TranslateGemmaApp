@@ -40,6 +40,11 @@ public class ModelManager: ObservableObject {
         self.models = fetched
     }
     
+    public func getModelDirectory(modelId: String) -> URL {
+        let repo = Hub.Repo(id: modelId)
+        return hub.localRepoLocation(repo)
+    }
+    
     public func checkIfDownloaded(modelId: String) -> Bool {
         let repo = Hub.Repo(id: modelId)
         let path = hub.localRepoLocation(repo)
