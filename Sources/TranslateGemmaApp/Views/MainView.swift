@@ -486,7 +486,47 @@ struct ModelDashboardView: View {
                     }
                     .padding(.horizontal, 32)
                 }
-                .padding(.bottom, 32)
+                
+                // Unified Storage Management Footer
+                VStack(spacing: 0) {
+                    Divider().opacity(0.1)
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Storage Location").font(.system(size: 10, weight: .bold)).foregroundColor(.secondary).textCase(.uppercase)
+                            Text(modelManager.currentHubPath)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(.primary.opacity(0.7))
+                                .lineLimit(1)
+                        }
+                        
+                        Spacer()
+                        
+                        HStack(spacing: 8) {
+                            Button(action: { modelManager.resetToDefaultHubPath() }) {
+                                Text("Reset").font(.system(size: 11, weight: .bold))
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.primary.opacity(0.05)))
+                            
+                            Button(action: { modelManager.selectCustomHubPath() }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "folder.badge.gearshape")
+                                    Text("Change").font(.system(size: 11, weight: .bold))
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Capsule().fill(.blue.opacity(0.1)))
+                            .foregroundColor(.blue)
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.vertical, 20)
+                    .background(.ultraThinMaterial.opacity(0.5))
+                }
             }
         }
         .frame(width: 650, height: 600)

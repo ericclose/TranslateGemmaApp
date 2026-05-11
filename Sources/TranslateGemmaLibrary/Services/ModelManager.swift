@@ -142,4 +142,29 @@ public class ModelManager: ObservableObject {
             self.models[index].downloadProgress = 0
         }
     }
+    
+    public func selectCustomHubPath() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.message = "Please select the Hugging Face Hub storage directory"
+        panel.prompt = "Select Directory"
+        
+        if panel.runModal() == .OK, let url = panel.url {
+            AppConfiguration.updateHubPath(url)
+            self.currentHubPath = url.path
+            Task {
+                await fetchCollectionModels()
+            }
+        }
+    }
+    
+    public func resetToDefaultHubPath() {
+        AppConfiguration.resetHubPath()
+        self.currentHubPath = AppConfiguration.currentHubPath.path
+        Task {
+            await fetchCollectionModels()
+        }
+    }
 }
