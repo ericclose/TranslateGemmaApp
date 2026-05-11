@@ -75,6 +75,8 @@ public class ModelManager: ObservableObject {
         
         downloadTask = Task {
             await MainActor.run { self.isConnecting = true }
+            
+            
             do {
                 guard let repoId = Repo.ID(rawValue: modelId) else {
                     self.logger.error("Invalid Model ID: \(modelId)")
@@ -86,6 +88,31 @@ public class ModelManager: ObservableObject {
                     try await hubClient.downloadSnapshot(of: repo, progressHandler: progress)
                 }
                 
+                // --- PROGRESS SELF-HEALING SNIFFER ---
+                // Periodically check for active tasks that might bypass the Progress object (common in LFS redirects)
+                let sniffer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
+                    AppConfiguration.downloadSession.getAllTasks { tasks in
+                        for task in tasks {
+                            let count = task.countOfBytesReceived
+                            let total = task.countOfBytesExpectedToReceive
+                            
+                            // If we find a significant task that is moving, update the UI
+                            if count > 0 && (total > 10_000_000 || total == -1) {
+                                Task { @MainActor in
+                                    if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+                                        // Only update if the sniffer has more recent data than the standard callback
+                                        if count > self.models[index].completedSize {
+                                            self.models[index].completedSize = count
+                                            if total > 0 { self.models[index].totalSize = total }
+                                            self.models[index].downloadProgress = total > 0 ? Double(count) / Double(total) : self.models[index].downloadProgress
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                
                 _ = try await downloader(repoId) { p in
                     if p.completedUnitCount > 0 {
                         Task { @MainActor in self.isConnecting = false }
@@ -95,18 +122,18 @@ public class ModelManager: ObservableObject {
                     let completed = p.completedUnitCount
                     let total = p.totalUnitCount
                     
-                    if completed % (total / 20 + 1) == 0 || fraction >= 0.99 {
-                        self.logger.debug("Download Progress: \(Int(fraction * 100))% (\(completed)/\(total))")
-                    }
-                    
                     Task { @MainActor in
                         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                            self.models[index].downloadProgress = fraction
-                            self.models[index].completedSize = completed
-                            self.models[index].totalSize = total
+                            // Standard progress update
+                            if completed > self.models[index].completedSize {
+                                self.models[index].completedSize = completed
+                                self.models[index].totalSize = total
+                                self.models[index].downloadProgress = fraction
+                            }
                         }
                     }
                 }
+                sniffer.invalidate()
                 
                 if !Task.isCancelled {
                     if let index = self.models.firstIndex(where: { $0.id == modelId }) {

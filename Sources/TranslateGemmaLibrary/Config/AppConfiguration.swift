@@ -19,19 +19,22 @@ public enum AppConfiguration {
         return home.appendingPathComponent(".cache/huggingface/hub")
     }
     
+    /// Dedicated session for all Hub operations, allowing progress sniffing.
+    public static let downloadSession: URLSession = URLSession(configuration: .default)
+    
     /// Unified HubClient instance ensuring global cache path consistency.
     public static private(set) var hubClient: HubClient = createHubClient()
     
     private static func createHubClient() -> HubClient {
         let path = currentHubPath
         try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        return HubClient(cache: HubCache(cacheDirectory: path))
+        return HubClient(session: downloadSession, cache: HubCache(cacheDirectory: path))
     }
     
     /// Updates the unified Hub path and reinitializes HubClient.
     public static func updateHubPath(_ newPath: URL) {
         UserDefaults.standard.set(newPath.path, forKey: hubPathKey)
-        hubClient = HubClient(cache: HubCache(cacheDirectory: newPath))
+        hubClient = HubClient(session: downloadSession, cache: HubCache(cacheDirectory: newPath))
     }
     
     /// Resets to the default path (~/.cache/huggingface/hub).

@@ -43,6 +43,15 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .executableTarget(
+            name: "LiveDownloadTest",
+            dependencies: [
+                "TranslateGemmaLibrary",
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+            ],
+            path: "Sources/Diagnostic",
+            sources: ["live_download_test.swift"]
+        ),
         .testTarget(
             name: "TranslateGemmaAppTests",
             dependencies: ["TranslateGemmaLibrary"]
