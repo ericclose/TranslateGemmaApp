@@ -5,6 +5,36 @@ import os
 
 private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
 
+struct LiquidBackground: View {
+    @State private var t: Float = 0
+    let timer = Timer.publish(every: 0.05, on: .main, in: .common).autoconnect()
+    
+    var body: some View {
+        if #available(macOS 15.0, *) {
+            MeshGradient(width: 3, height: 3, points: [
+                [0, 0], [0.5, 0], [1, 0],
+                [0, 0.5], [0.5 + 0.1 * sin(t), 0.5 + 0.1 * cos(t)], [1, 0.5],
+                [0, 1], [0.5, 1], [1, 1]
+            ], colors: [
+                .blue.opacity(0.15), .purple.opacity(0.1), .cyan.opacity(0.15),
+                .indigo.opacity(0.1), .blue.opacity(0.2), .purple.opacity(0.1),
+                .cyan.opacity(0.1), .blue.opacity(0.15), .indigo.opacity(0.1)
+            ])
+            .onReceive(timer) { _ in
+                t += 0.02
+            }
+            .ignoresSafeArea()
+        } else {
+            LinearGradient(
+                colors: [.blue.opacity(0.1), .purple.opacity(0.05), .cyan.opacity(0.1)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+        }
+    }
+}
+
 struct MainView: View {
     @StateObject var modelManager = ModelManager()
     @StateObject var translationService = TranslationService()
@@ -20,33 +50,33 @@ struct MainView: View {
     @State private var errorMessage: String? = nil
     @State private var showErrorAlert = false
     
+    @State private var isHoveringSource = false
+    @State private var isHoveringTarget = false
+    
     let languages = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
     
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Simplified Clean Background
-                Color(NSColor.windowBackgroundColor)
-                    .ignoresSafeArea()
+                // Liquid Glass Canvas
+                LiquidBackground()
                 
                 VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    // Header with Safe Area awareness
                     HeaderView(
                         selectedModelId: $selectedModelId,
                         modelManager: modelManager,
                         showModelDashboard: $showModelDashboard
                     )
-                    .padding(.top, max(geometry.safeAreaInsets.top, 20))
-                    .padding(.horizontal, 32)
+                    .padding(.top, 40)
+                    .padding(.horizontal, 40)
                     
-                    Spacer(minLength: 20)
+                    Spacer()
                     
-                    // Responsive Content Cards
                     AdaptiveLayout(width: geometry.size.width) {
-                        // Source Card
+                        // Source Card (Floating Ornament Style)
                         TranslationCard(
                             title: {
                                 Text(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect")
@@ -57,25 +87,27 @@ struct MainView: View {
                             isReadOnly: false,
                             placeholder: "Type something...",
                             containerWidth: geometry.size.width,
+                            isHovered: isHoveringSource,
                             actions: {
                                 HStack(spacing: 12) {
                                     Button(action: importFile) {
                                         Image(systemName: "doc.badge.plus")
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                                    .buttonStyle(OrnamentButtonStyle())
                                     .help("Import File")
                                     
                                     if !inputText.isEmpty {
                                         Button(action: { inputText = ""; importedFileURL = nil }) {
                                             Image(systemName: "xmark")
                                         }
-                                        .buttonStyle(GlassButtonStyle())
+                                        .buttonStyle(OrnamentButtonStyle())
                                     }
                                 }
                             }
                         )
+                        .onHover { isHoveringSource = $0 }
                         
-                        // Target Card
+                        // Target Card (Floating Ornament Style)
                         TranslationCard(
                             title: {
                                 Picker("", selection: $targetLanguage) {
@@ -93,60 +125,63 @@ struct MainView: View {
                             placeholder: "Translation will appear here",
                             textColor: .blue,
                             containerWidth: geometry.size.width,
+                            isHovered: isHoveringTarget,
                             actions: {
                                 HStack(spacing: 12) {
                                     Button(action: copyToClipboard) {
                                         Image(systemName: "doc.on.doc")
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                                    .buttonStyle(OrnamentButtonStyle())
                                     .disabled(outputText.isEmpty)
                                     
                                     Button(action: swapLanguages) {
                                         Image(systemName: "arrow.left.and.right")
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                                    .buttonStyle(OrnamentButtonStyle())
                                     
                                     Button(action: exportFile) {
                                         Image(systemName: "square.and.arrow.up")
                                     }
-                                    .buttonStyle(GlassButtonStyle())
+                                    .buttonStyle(OrnamentButtonStyle())
                                     .disabled(outputText.isEmpty)
                                 }
                             }
                         )
+                        .onHover { isHoveringTarget = $0 }
                     }
                     .padding(.horizontal, 32)
                     
-                    Spacer(minLength: 20)
+                    Spacer()
                     
-                    // Floating Translate Button
-                    if !inputText.isEmpty {
-                        Button(action: translateAction) {
-                            HStack(spacing: 8) {
-                                if translationService.isTranslating {
-                                    ProgressView().controlSize(.small).brightness(1)
-                                } else {
-                                    Text("Translate")
-                                    Image(systemName: "sparkles")
-                                }
+                    // Footer Translate Button (Large Ornament)
+                    Button(action: translateAction) {
+                        HStack(spacing: 12) {
+                            if translationService.isTranslating {
+                                ProgressView()
+                                    .controlSize(.small)
+                                    .tint(.white)
+                            } else {
+                                Image(systemName: "sparkles")
+                                    .font(.system(size: 18, weight: .bold))
                             }
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 12)
-                            .background(
-                                Capsule()
-                                    .fill(Color.blue.opacity(0.8))
-                                    .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
-                            )
-                            .foregroundColor(.white)
+                            Text("Translate")
+                                .font(.system(size: 18, weight: .bold, design: .rounded))
                         }
-                        .buttonStyle(.plain)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 24))
+                        .frame(width: 200, height: 54)
+                        .background(
+                            Capsule()
+                                .fill(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .top, endPoint: .bottom))
+                                .shadow(color: .blue.opacity(0.3), radius: 15, x: 0, y: 8)
+                        )
+                        .foregroundColor(.white)
                     }
+                    .buttonStyle(.plain)
+                    .padding(.bottom, 40)
+                    .disabled(inputText.isEmpty || translationService.isTranslating)
                 }
             }
         }
-        .frame(minWidth: 900, minHeight: 600)
+        .frame(minWidth: 900, minHeight: 650)
         .sheet(isPresented: $showModelDashboard) {
             ModelDashboardView(
                 modelManager: modelManager,
@@ -168,6 +203,40 @@ struct MainView: View {
                     selectedModelId = downloaded.first?.id ?? ""
                 }
             }
+        }
+    }
+    
+    func importFile() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
+        if panel.runModal() == .OK, let url = panel.url {
+            importedFileURL = url
+            inputText = (try? String(contentsOf: url)) ?? ""
+        }
+    }
+    
+    func exportFile() {
+        let panel = NSSavePanel()
+        panel.nameFieldStringValue = importedFileURL != nil ? "translated_" + importedFileURL!.lastPathComponent : "translated.txt"
+        if panel.runModal() == .OK, let url = panel.url {
+            try? outputText.write(to: url, atomically: true, encoding: .utf8)
+        }
+    }
+    
+    func copyToClipboard() {
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        pasteboard.setString(outputText, forType: .string)
+    }
+    
+    func swapLanguages() {
+        let currentTarget = targetLanguage
+        if currentTarget == "English" {
+            targetLanguage = "Chinese"
+        } else {
+            targetLanguage = "English"
         }
     }
     
@@ -196,38 +265,6 @@ struct MainView: View {
             }
         }
     }
-    
-    func swapLanguages() {
-        let currentTarget = targetLanguage
-        if currentTarget == "English" {
-            targetLanguage = "Chinese"
-        } else {
-            targetLanguage = "English"
-        }
-    }
-    
-    func copyToClipboard() {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-        pasteboard.setString(outputText, forType: .string)
-    }
-    
-    func importFile() {
-        let panel = NSOpenPanel()
-        panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
-        if panel.runModal() == .OK, let url = panel.url {
-            importedFileURL = url
-            inputText = (try? String(contentsOf: url)) ?? ""
-        }
-    }
-    
-    func exportFile() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = importedFileURL != nil ? "translated_" + importedFileURL!.lastPathComponent : "translated.txt"
-        if panel.runModal() == .OK, let url = panel.url {
-            try? outputText.write(to: url, atomically: true, encoding: .utf8)
-        }
-    }
 }
 
 // MARK: - Components
@@ -240,7 +277,7 @@ struct AdaptiveLayout<Content: View>: View {
         HStack(spacing: 24) {
             content
         }
-        .frame(maxWidth: min(width - 64, 1600)) // Max content width of 1600
+        .frame(maxWidth: min(width - 64, 1600))
     }
 }
 
@@ -252,26 +289,28 @@ struct HeaderView: View {
     var body: some View {
         HStack(spacing: 20) {
             Text("TranslateGemma")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundColor(.primary.opacity(0.9))
+                .font(.system(size: 24, weight: .black, design: .rounded))
+                .foregroundStyle(
+                    LinearGradient(colors: [.primary.opacity(0.8), .primary.opacity(0.5)], startPoint: .top, endPoint: .bottom)
+                )
             
             Spacer()
             
-            HStack(spacing: 10) {
+            HStack(spacing: 12) {
                 Button(action: { modelManager.selectCustomHubPath() }) {
-                    Image(systemName: "folder")
+                    Image(systemName: "folder.badge.gearshape")
                 }
-                .buttonStyle(CircleGlassButtonStyle())
+                .buttonStyle(OrnamentButtonStyle())
                 
                 Button(action: { showModelDashboard = true }) {
-                    Image(systemName: "cpu")
+                    Image(systemName: "cpu.fill")
                 }
-                .buttonStyle(CircleGlassButtonStyle())
+                .buttonStyle(OrnamentButtonStyle())
                 
-                HStack(spacing: 8) {
-                    Image(systemName: "brain.head.profile")
+                HStack(spacing: 10) {
+                    Image(systemName: "brain.head.profile.fill")
                         .font(.system(size: 14))
-                        .foregroundColor(.blue.opacity(0.8))
+                        .foregroundColor(.blue)
                     
                     let downloadedModels = modelManager.models.filter { $0.isDownloaded }
                     Picker("", selection: $selectedModelId) {
@@ -285,12 +324,12 @@ struct HeaderView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .frame(width: 260) // Increased width to avoid truncation
+                    .frame(width: 260)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 8)
                 .background(Capsule().fill(.ultraThinMaterial))
-                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
             }
         }
     }
@@ -315,8 +354,6 @@ struct NativeTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
-        
-        // Remove all implicit padding for perfect alignment
         textView.textContainerInset = .zero
         textView.textContainer?.lineFragmentPadding = 0
         
@@ -338,11 +375,7 @@ struct NativeTextEditor: NSViewRepresentable {
     
     class Coordinator: NSObject, NSTextViewDelegate {
         var parent: NativeTextEditor
-        
-        init(_ parent: NativeTextEditor) {
-            self.parent = parent
-        }
-        
+        init(_ parent: NativeTextEditor) { self.parent = parent }
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
             self.parent.text = textView.string
@@ -357,6 +390,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
     let placeholder: String
     var textColor: Color = .primary
     let containerWidth: CGFloat
+    let isHovered: Bool
     @ViewBuilder let actions: Actions
     
     private var fontSize: CGFloat {
@@ -366,15 +400,14 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
                 title
                     .frame(maxWidth: .infinity, alignment: .leading)
-                
                 actions
                     .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .frame(height: 28)
+            .frame(height: 32)
             
             ZStack(alignment: .topLeading) {
                 if text.isEmpty {
@@ -382,7 +415,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary.opacity(0.3))
                         .allowsHitTesting(false)
-                        .padding(.top, 1) // Tiny offset for visual balance
+                        .padding(.top, 1)
                 }
                 
                 if isReadOnly {
@@ -394,52 +427,47 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                             .multilineTextAlignment(.leading)
                     }
                 } else {
-                    NativeTextEditor(
-                        text: $text,
-                        font: .systemFont(ofSize: fontSize, weight: .medium)
-                    )
-                    .frame(minHeight: 200)
+                    NativeTextEditor(text: $text, font: .systemFont(ofSize: fontSize, weight: .medium))
+                        .frame(minHeight: 250)
                 }
             }
         }
         .padding(geometryPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 6)
+            ZStack {
+                Rectangle().fill(.ultraThinMaterial)
+                
+                RoundedRectangle(cornerRadius: 24)
+                    .stroke(
+                        LinearGradient(colors: [.white.opacity(0.4), .white.opacity(0.05)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                        lineWidth: 1.5
+                    )
+            }
         )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
+        .cornerRadius(24)
+        .shadow(color: Color.black.opacity(isHovered ? 0.08 : 0.04), radius: isHovered ? 25 : 15, x: 0, y: isHovered ? 12 : 8)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .animation(.spring(response: 0.4, dampingFraction: 0.7), value: isHovered)
     }
     
     private var geometryPadding: CGFloat {
-        containerWidth > 1200 ? 28 : 16
+        containerWidth > 1200 ? 36 : 24
     }
 }
 
-
-
-struct GlassButtonStyle: ButtonStyle {
+struct OrnamentButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .padding(8)
-            .background(Circle().fill(.ultraThinMaterial))
-            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
-            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
-            .opacity(configuration.isPressed ? 0.8 : 1.0)
-    }
-}
-
-struct CircleGlassButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .frame(width: 32, height: 32)
-            .background(Circle().fill(.ultraThinMaterial))
-            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .font(.system(size: 14, weight: .semibold))
+            .frame(width: 36, height: 36)
+            .background(
+                ZStack {
+                    Circle().fill(.ultraThinMaterial)
+                    Circle().stroke(Color.white.opacity(0.3), lineWidth: 1)
+                }
+            )
+            .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 3)
             .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
@@ -451,70 +479,50 @@ struct ModelDashboardView: View {
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Model Library")
-                        .font(.system(size: 24, weight: .bold, design: .rounded))
-                        .foregroundColor(.primary)
-                    
-                    Text("Manage your local LLM weights")
-                        .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundColor(.secondary)
-                }
-                
-                Spacer()
-                
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 14, weight: .bold))
-                }
-                .buttonStyle(CircleGlassButtonStyle())
-            }
-            .padding(24)
-            .background(.ultraThinMaterial)
+        ZStack {
+            LiquidBackground()
+            VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
+                .ignoresSafeArea()
             
-            Divider().opacity(0.1)
-            
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(modelManager.models) { model in
-                        ModelRowView(
-                            model: model, 
-                            modelManager: modelManager,
-                            isSelected: model.id == selectedModelId
-                        )
+            VStack(spacing: 0) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Model Library")
+                            .font(.system(size: 28, weight: .black, design: .rounded))
+                            .foregroundColor(.primary)
+                        Text("Manage your local LLM weights").font(.system(size: 13, weight: .medium, design: .rounded)).foregroundColor(.secondary)
                     }
+                    Spacer()
+                    Button(action: { dismiss() }) {
+                        Image(systemName: "xmark").font(.system(size: 14, weight: .bold))
+                    }
+                    .buttonStyle(OrnamentButtonStyle())
                 }
-                .padding(20)
-            }
-            
-            Divider().opacity(0.1)
-            
-            // Footer Info
-            HStack {
-                Image(systemName: "folder.fill")
-                    .foregroundColor(.secondary)
-                Text(modelManager.currentHubPath)
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
+                .padding(32)
                 
-                Spacer()
-                
-                Button(action: { modelManager.selectCustomHubPath() }) {
-                    Text("Change Location")
-                        .font(.system(size: 11, weight: .semibold))
+                ScrollView {
+                    VStack(spacing: 16) {
+                        ForEach(modelManager.models) { model in
+                            ModelRowView(model: model, modelManager: modelManager, isSelected: model.id == selectedModelId)
+                        }
+                    }
+                    .padding(.horizontal, 32)
                 }
-                .buttonStyle(.link)
+                
+                HStack {
+                    Image(systemName: "folder.fill").foregroundColor(.blue)
+                    Text(modelManager.currentHubPath).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundColor(.secondary).lineLimit(1)
+                    Spacer()
+                    Button(action: { modelManager.selectCustomHubPath() }) {
+                        Text("Change Location").font(.system(size: 12, weight: .bold))
+                    }
+                    .buttonStyle(.link)
+                }
+                .padding(24)
+                .background(.ultraThinMaterial)
             }
-            .padding(.horizontal, 24)
-            .padding(.vertical, 16)
-            .background(.ultraThinMaterial.opacity(0.5))
         }
-        .frame(width: 550, height: 550)
-        .background(VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow))
+        .frame(width: 650, height: 600)
     }
 }
 
@@ -525,94 +533,56 @@ struct ModelRowView: View {
     
     var body: some View {
         HStack(spacing: 16) {
-            // Model Icon
             ZStack {
                 Circle()
                     .fill(isSelected ? Color.blue.opacity(0.2) : (model.isDownloaded ? Color.blue.opacity(0.1) : Color.primary.opacity(0.05)))
                     .frame(width: 44, height: 44)
-                
                 Image(systemName: isSelected ? "brain.head.profile.fill" : (model.isDownloaded ? "brain.head.profile" : "cloud.circle"))
                     .font(.system(size: 20))
                     .foregroundColor(isSelected ? .blue : (model.isDownloaded ? .blue : .secondary))
             }
             
             VStack(alignment: .leading, spacing: 4) {
-                Text(model.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundColor(isSelected ? .blue : .primary)
-                
+                Text(model.name).font(.system(size: 15, weight: .bold, design: .rounded)).foregroundColor(isSelected ? .blue : .primary)
                 HStack(spacing: 8) {
-                    Text(model.size)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundColor(.secondary)
-                    
+                    Text(model.size).font(.system(size: 12, weight: .medium, design: .rounded)).foregroundColor(.secondary)
                     if isSelected {
-                        Text("• Active")
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundColor(.blue)
+                        Text("• Active").font(.system(size: 12, weight: .bold, design: .rounded)).foregroundColor(.blue)
                     } else if model.isDownloaded {
-                        Text("• Local")
-                            .font(.system(size: 12, weight: .medium, design: .rounded))
-                            .foregroundColor(.green.opacity(0.8))
+                        Text("• Local").font(.system(size: 12, weight: .medium, design: .rounded)).foregroundColor(.green.opacity(0.8))
                     }
                 }
             }
-            
             Spacer()
             
             if model.isDownloaded {
                 HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.green)
-                    
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundColor(.green)
                     Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 14, weight: .semibold))
-                            .padding(8)
-                            .background(Circle().fill(.primary.opacity(0.05)))
+                        Image(systemName: "folder").font(.system(size: 14, weight: .semibold)).padding(8).background(Circle().fill(.primary.opacity(0.05)))
                     }
                     .buttonStyle(.plain)
-                    .help("Show in Finder")
                 }
             } else if modelManager.isDownloading && model.downloadProgress > 0 && model.downloadProgress < 1.0 {
                 VStack(alignment: .trailing, spacing: 6) {
                     HStack(spacing: 8) {
-                        ProgressView(value: model.downloadProgress)
-                            .progressViewStyle(.linear)
-                            .frame(width: 100)
-                            .tint(.blue)
-                        
+                        ProgressView(value: model.downloadProgress).progressViewStyle(.linear).frame(width: 100).tint(.blue)
                         Button(action: { modelManager.cancelDownload() }) {
-                            Image(systemName: "stop.circle.fill")
-                                .font(.system(size: 18))
-                                .foregroundColor(.red.opacity(0.8))
+                            Image(systemName: "stop.circle.fill").font(.system(size: 18)).foregroundColor(.red.opacity(0.8))
                         }
                         .buttonStyle(.plain)
-                        .help("Cancel Download")
                     }
-                    
-                    Text("Downloading... \(Int(model.downloadProgress * 100))%")
-                        .font(.system(size: 10, weight: .bold, design: .rounded))
-                        .foregroundColor(.blue)
-                        .padding(.trailing, 26) // Align with progress bar
+                    Text("Downloading... \(Int(model.downloadProgress * 100))%").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundColor(.blue).padding(.trailing, 26)
                 }
             } else {
-                Button(action: { 
-                    Task { await modelManager.downloadModel(modelId: model.id) }
-                }) {
+                Button(action: { Task { await modelManager.downloadModel(modelId: model.id) } }) {
                     HStack(spacing: 8) {
-                        Image(systemName: "icloud.and.arrow.down")
-                            .font(.system(size: 13, weight: .bold))
-                        Text("Download")
-                            .font(.system(size: 13, weight: .bold))
+                        Image(systemName: "icloud.and.arrow.down").font(.system(size: 13, weight: .bold))
+                        Text("Download").font(.system(size: 13, weight: .bold))
                     }
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(
-                        Capsule()
-                            .fill(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    )
+                    .background(Capsule().fill(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)))
                     .foregroundColor(.white)
                     .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
@@ -637,7 +607,6 @@ struct ModelRowView: View {
 struct VisualEffectView: NSViewRepresentable {
     var material: NSVisualEffectView.Material
     var blendingMode: NSVisualEffectView.BlendingMode
-
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = material
@@ -645,12 +614,8 @@ struct VisualEffectView: NSViewRepresentable {
         view.state = .active
         return view
     }
-
     func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
         nsView.material = material
         nsView.blendingMode = blendingMode
     }
 }
-
-
-
