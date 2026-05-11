@@ -4,7 +4,6 @@ import MLXLLM
 import MLXLMCommon
 import MLXHuggingFace
 import Tokenizers
-import Hub
 import HuggingFace
 import os
 
