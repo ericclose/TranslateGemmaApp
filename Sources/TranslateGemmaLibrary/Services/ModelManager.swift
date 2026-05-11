@@ -15,14 +15,11 @@ public struct ModelInfo: Identifiable {
 public class ModelManager: ObservableObject {
     @Published public var models: [ModelInfo] = []
     @Published public var isDownloading = false
+    @Published public var downloadingModelId: String? = nil
     @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
     private let logger = AppLogger.service("ModelManager")
-    private var hubClient: HubClient { 
-        HubClient(
-            cache: HubCache(cacheDirectory: AppConfiguration.currentHubPath)
-        )
-    }
+    private var hubClient: HubClient { AppConfiguration.hubClient }
     
     public init() {
         Task {
@@ -56,21 +53,28 @@ public class ModelManager: ObservableObject {
     
     private var downloadTask: Task<Void, Never>?
     
+    // For testing purposes
+    internal var downloadSnapshotProvider: ((Repo.ID, @escaping @Sendable (Progress) -> Void) async throws -> URL)? = nil
+    
     public func downloadModel(modelId: String) async {
         self.isDownloading = true
+        self.downloadingModelId = modelId
         
         downloadTask = Task {
             do {
                 let repoId = Repo.ID(rawValue: modelId)!
                 
-                _ = try await hubClient.downloadSnapshot(
-                    of: repoId,
-                    progressHandler: { p in
+                let downloader: (Repo.ID, @escaping @Sendable (Progress) -> Void) async throws -> URL = downloadSnapshotProvider ?? { [hubClient] repo, progress in
+                    try await hubClient.downloadSnapshot(of: repo, progressHandler: progress)
+                }
+                
+                _ = try await downloader(repoId) { p in
+                    Task { @MainActor in
                         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
                             self.models[index].downloadProgress = p.fractionCompleted
                         }
                     }
-                )
+                }
                 
                 if !Task.isCancelled {
                     if let index = self.models.firstIndex(where: { $0.id == modelId }) {
@@ -86,6 +90,7 @@ public class ModelManager: ObservableObject {
             
             await MainActor.run {
                 self.isDownloading = false
+                self.downloadingModelId = nil
                 self.downloadTask = nil
             }
         }
@@ -95,6 +100,7 @@ public class ModelManager: ObservableObject {
         downloadTask?.cancel()
         downloadTask = nil
         self.isDownloading = false
+        self.downloadingModelId = nil
         
         // Reset progress for any model that was downloading
         for i in 0..<models.count {
@@ -118,8 +124,8 @@ public class ModelManager: ObservableObject {
     public func deleteModel(modelId: String) {
         let hubPath = AppConfiguration.currentHubPath
         
-        // Construct potential paths for modern layout, legacy layout, and locks
-        let modernId = "models--" + modelId.replacingOccurrences(of: "/", with: "--")
+        // Use unified modern ID helper from AppConfiguration
+        let modernId = AppConfiguration.getModernHubId(modelId: modelId)
         let modernRepoPath = hubPath.appendingPathComponent(modernId)
         let legacyPath = hubPath.appendingPathComponent("models").appendingPathComponent(modelId)
         let lockPath = hubPath.appendingPathComponent(".locks").appendingPathComponent(modernId)

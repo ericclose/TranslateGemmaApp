@@ -587,7 +587,7 @@ struct ModelRowView: View {
                     .foregroundColor(.red)
                     .help("Delete Model")
                 }
-            } else if modelManager.isDownloading && model.downloadProgress > 0 && model.downloadProgress < 1.0 {
+            } else if modelManager.downloadingModelId == model.id {
                 VStack(alignment: .trailing, spacing: 6) {
                     HStack(spacing: 8) {
                         ProgressView(value: model.downloadProgress).progressViewStyle(.linear).frame(width: 100).tint(.blue)

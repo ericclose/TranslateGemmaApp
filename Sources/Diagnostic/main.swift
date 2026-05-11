@@ -4,11 +4,12 @@ import HuggingFace
 
 @main
 struct Diagnostic {
+    @MainActor
     static func main() async {
         print("--- TranslateGemma Path Debug ---")
         let modelId = "mlx-community/translategemma-4b-it-4bit"
         
-        let manager = await ModelManager()
+        let manager = ModelManager()
         let hubPath = URL(fileURLWithPath: manager.currentHubPath)
         
         // 1. Legacy path

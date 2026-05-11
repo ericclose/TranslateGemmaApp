@@ -1,9 +1,9 @@
 import XCTest
-@testable import TranslateGemmaApp
+import TranslateGemmaLibrary
 
 final class TranslateGemmaAppTests: XCTestCase {
     func testTranslation() async throws {
-        let service = TranslationService()
+        let service = await TranslationService()
         let modelId = "mlx-community/translategemma-4b-it-4bit"
         
         print("Testing with model: \(modelId)")
