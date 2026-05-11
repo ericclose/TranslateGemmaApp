@@ -265,31 +265,29 @@ struct HeaderView: View {
     @Binding var showModelDashboard: Bool
     
     var body: some View {
-        HStack(spacing: 24) {
+        HStack(spacing: 20) {
             Text("TranslateGemma")
-                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(.primary.opacity(0.8))
             
             Spacer()
             
-            HStack(spacing: 16) {
+            HStack(spacing: 12) {
                 Button(action: { modelManager.selectCustomHubPath() }) {
                     Image(systemName: "folder")
-                        .font(.system(size: 14, weight: .medium))
                 }
                 .buttonStyle(CircleGlassButtonStyle())
                 .help("Storage: \(modelManager.currentHubPath)")
                 
                 Button(action: { showModelDashboard = true }) {
                     Image(systemName: "cpu")
-                        .font(.system(size: 14, weight: .medium))
                 }
                 .buttonStyle(CircleGlassButtonStyle())
                 .help("Model Dashboard")
                 
-                HStack(spacing: 12) {
-                    Text("Model")
-                        .font(.system(size: 12, weight: .medium))
+                HStack(spacing: 8) {
+                    Image(systemName: "brain.head.profile") // Replaced "Model" text with AI icon
+                        .font(.system(size: 14))
                         .foregroundColor(.secondary)
                     
                     let downloadedModels = modelManager.models.filter { $0.isDownloaded }
@@ -304,12 +302,12 @@ struct HeaderView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .frame(width: 240) // Increased width to prevent truncation
+                    .frame(width: 200)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
                 .background(Capsule().fill(.ultraThinMaterial))
-                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+                .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
             }
         }
     }
@@ -346,27 +344,29 @@ struct TranslationCard<Actions: View, Center: View>: View {
     }
     
     private var fontSize: CGFloat {
-        let base: CGFloat = 20 // Further reduced for better fit
-        let scaled = containerWidth / 55
-        return max(15, min(base, scaled))
+        let base: CGFloat = 18 // Reduced for better balance
+        let scaled = containerWidth / 60
+        return max(14, min(base, scaled))
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            ZStack(alignment: .center) {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header with absolute centering for CenterView
+            ZStack {
                 HStack {
                     Text(title)
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary.opacity(0.5))
-                    
-                    Spacer()
+                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     
                     actions
+                        .frame(maxWidth: .infinity, alignment: .trailing)
                 }
                 
                 centerView
                     .frame(maxWidth: .infinity, alignment: .center)
             }
+            .frame(height: 32)
             
             if isReadOnly {
                 ScrollView {
@@ -375,42 +375,43 @@ struct TranslationCard<Actions: View, Center: View>: View {
                         .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
-                        .padding(.top, 4) // Align with TextEditor baseline
+                        .padding(.top, 8)
+                        .padding(.horizontal, 5)
                 }
             } else {
                 ZStack(alignment: .topLeading) {
-                    if text.isEmpty {
-                        Text(placeholder)
-                            .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.3))
-                            .padding(.top, 7) // Adjusted for macOS TextEditor
-                            .padding(.leading, 5) // Adjusted for macOS TextEditor
-                            .allowsHitTesting(false)
-                    }
-                    
                     TextEditor(text: $text)
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 200)
+                    
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.3))
+                            .padding(.top, 8) // Pixel-perfect alignment for macOS TextEditor
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                    }
                 }
             }
         }
         .padding(geometryPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 10)
+                .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 8)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 24)
+            RoundedRectangle(cornerRadius: 20)
                 .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
     }
     
     private var geometryPadding: CGFloat {
-        containerWidth > 1200 ? 40 : 24
+        containerWidth > 1200 ? 32 : 20
     }
 }
 
