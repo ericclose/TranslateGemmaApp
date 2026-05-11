@@ -119,7 +119,7 @@ public class ModelManager: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "Please select the unified Hugging Face Hub storage directory (e.g., ~/.cache/huggingface/hub or an external drive path)"
+        panel.message = "Please select the Hugging Face Hub storage directory)"
         panel.prompt = "Select Directory"
         
         if panel.runModal() == .OK, let url = panel.url {
