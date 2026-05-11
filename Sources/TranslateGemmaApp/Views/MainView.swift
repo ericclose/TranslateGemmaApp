@@ -23,119 +23,142 @@ struct MainView: View {
     let languages = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
     
     var body: some View {
-        ZStack {
-            // Liquid Glass Background
-            Image("liquid_background", bundle: .module)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .ignoresSafeArea()
-            
-            VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
-                .opacity(0.4)
-                .ignoresSafeArea()
-            
-            VStack(spacing: 0) {
-                // Header
-                HeaderView(
-                    selectedModelId: $selectedModelId,
-                    modelManager: modelManager,
-                    showModelDashboard: $showModelDashboard
-                )
-                .padding(.top, 24)
-                .padding(.horizontal, 32)
-                
-                Spacer()
-                
-                // Content Cards
-                HStack(spacing: 24) {
-                    // Source Card
-                    TranslationCard(
-                        title: importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect",
-                        text: $inputText,
-                        isReadOnly: false,
-                        placeholder: "Type something...",
-                        actions: {
-                            HStack(spacing: 12) {
-                                Button(action: importFile) {
-                                    Image(systemName: "doc.badge.plus")
-                                }
-                                .buttonStyle(GlassButtonStyle())
-                                .help("Import File")
-                                
-                                if !inputText.isEmpty {
-                                    Button(action: { inputText = ""; importedFileURL = nil }) {
-                                        Image(systemName: "xmark")
-                                    }
-                                    .buttonStyle(GlassButtonStyle())
-                                }
-                            }
-                        }
+        GeometryReader { geometry in
+            ZStack {
+                // Responsive Liquid Glass Background
+                ZStack {
+                    LinearGradient(
+                        gradient: Gradient(colors: [Color.white, Color.blue.opacity(0.1), Color.white]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
                     )
                     
-                    // Target Card
-                    TranslationCard(
-                        title: targetLanguage,
-                        text: .constant(outputText),
-                        isReadOnly: true,
-                        placeholder: "Translation will appear here",
-                        textColor: .blue,
-                        actions: {
-                            HStack(spacing: 12) {
-                                Picker("", selection: $targetLanguage) {
-                                    ForEach(languages, id: \.self) { lang in
-                                        Text(lang).tag(lang)
+                    Image("liquid_background", bundle: .module)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
+                        .clipped()
+                        .opacity(0.6)
+                        .blur(radius: 20)
+                    
+                    Image("liquid_background", bundle: .module)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: geometry.size.width * 1.2)
+                        .opacity(0.8)
+                }
+                .ignoresSafeArea()
+                
+                VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
+                    .opacity(0.3)
+                    .ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Header with Safe Area awareness
+                    HeaderView(
+                        selectedModelId: $selectedModelId,
+                        modelManager: modelManager,
+                        showModelDashboard: $showModelDashboard
+                    )
+                    .padding(.top, max(geometry.safeAreaInsets.top, 20))
+                    .padding(.horizontal, 32)
+                    
+                    Spacer(minLength: 20)
+                    
+                    // Responsive Content Cards
+                    AdaptiveLayout(width: geometry.size.width) {
+                        // Source Card
+                        TranslationCard(
+                            title: importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect",
+                            text: $inputText,
+                            isReadOnly: false,
+                            placeholder: "Type something...",
+                            containerWidth: geometry.size.width,
+                            actions: {
+                                HStack(spacing: 12) {
+                                    Button(action: importFile) {
+                                        Image(systemName: "doc.badge.plus")
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .help("Import File")
+                                    
+                                    if !inputText.isEmpty {
+                                        Button(action: { inputText = ""; importedFileURL = nil }) {
+                                            Image(systemName: "xmark")
+                                        }
+                                        .buttonStyle(GlassButtonStyle())
                                     }
                                 }
-                                .pickerStyle(.menu)
-                                .frame(width: 100)
-                                .labelsHidden()
-                                
-                                Button(action: copyToClipboard) {
-                                    Image(systemName: "doc.on.doc")
-                                }
-                                .buttonStyle(GlassButtonStyle())
-                                .disabled(outputText.isEmpty)
-                                
-                                Button(action: swapLanguages) {
-                                    Image(systemName: "arrow.left.and.right")
-                                }
-                                .buttonStyle(GlassButtonStyle())
-                                
-                                Button(action: exportFile) {
-                                    Image(systemName: "square.and.arrow.up")
-                                }
-                                .buttonStyle(GlassButtonStyle())
-                                .disabled(outputText.isEmpty)
                             }
-                        }
-                    )
-                }
-                .padding(.horizontal, 32)
-                .padding(.bottom, 48)
-                
-                // Floating Translate Button (Optimized for MD3/Liquid Glass)
-                if !inputText.isEmpty {
-                    Button(action: translateAction) {
-                        HStack(spacing: 8) {
-                            if translationService.isTranslating {
-                                ProgressView().controlSize(.small).brightness(1)
-                            } else {
-                                Text("Translate")
-                                Image(systemName: "sparkles")
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.vertical, 12)
-                        .background(
-                            Capsule()
-                                .fill(Color.blue.opacity(0.8))
-                                .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
                         )
-                        .foregroundColor(.white)
+                        
+                        // Target Card
+                        TranslationCard(
+                            title: targetLanguage,
+                            text: .constant(outputText),
+                            isReadOnly: true,
+                            placeholder: "Translation will appear here",
+                            textColor: .blue,
+                            containerWidth: geometry.size.width,
+                            actions: {
+                                HStack(spacing: 12) {
+                                    Picker("", selection: $targetLanguage) {
+                                        ForEach(languages, id: \.self) { lang in
+                                            Text(lang).tag(lang)
+                                        }
+                                    }
+                                    .pickerStyle(.menu)
+                                    .frame(width: 100)
+                                    .labelsHidden()
+                                    
+                                    Button(action: copyToClipboard) {
+                                        Image(systemName: "doc.on.doc")
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .disabled(outputText.isEmpty)
+                                    
+                                    Button(action: swapLanguages) {
+                                        Image(systemName: "arrow.left.and.right")
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    
+                                    Button(action: exportFile) {
+                                        Image(systemName: "square.and.arrow.up")
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                    .disabled(outputText.isEmpty)
+                                }
+                            }
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .padding(.bottom, 24)
+                    .padding(.horizontal, 32)
+                    
+                    Spacer(minLength: 20)
+                    
+                    // Floating Translate Button
+                    if !inputText.isEmpty {
+                        Button(action: translateAction) {
+                            HStack(spacing: 8) {
+                                if translationService.isTranslating {
+                                    ProgressView().controlSize(.small).brightness(1)
+                                } else {
+                                    Text("Translate")
+                                    Image(systemName: "sparkles")
+                                }
+                            }
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(
+                                Capsule()
+                                    .fill(Color.blue.opacity(0.8))
+                                    .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
+                            )
+                            .foregroundColor(.white)
+                        }
+                        .buttonStyle(.plain)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                        .padding(.bottom, max(geometry.safeAreaInsets.bottom, 24))
+                    }
                 }
             }
         }
@@ -188,10 +211,6 @@ struct MainView: View {
     }
     
     func swapLanguages() {
-        // Swap logic: In this app, source is Auto-Detect mostly, 
-        // but we can swap target language back to English or similar if we had a source language picker.
-        // For now, let's just rotate target language or do a visual swap if possible.
-        // Since we don't have a source language picker yet, we'll just show the interaction.
         let currentTarget = targetLanguage
         if currentTarget == "English" {
             targetLanguage = "Chinese"
@@ -226,6 +245,18 @@ struct MainView: View {
 
 // MARK: - Components
 
+struct AdaptiveLayout<Content: View>: View {
+    let width: CGFloat
+    @ViewBuilder let content: Content
+    
+    var body: some View {
+        HStack(spacing: 24) {
+            content
+        }
+        .frame(maxWidth: min(width - 64, 1600)) // Max content width of 1600
+    }
+}
+
 struct HeaderView: View {
     @Binding var selectedModelId: String
     @ObservedObject var modelManager: ModelManager
@@ -240,7 +271,6 @@ struct HeaderView: View {
             Spacer()
             
             HStack(spacing: 16) {
-                // Settings/Storage
                 Button(action: { modelManager.selectCustomHubPath() }) {
                     Image(systemName: "folder")
                         .font(.system(size: 14, weight: .medium))
@@ -248,7 +278,6 @@ struct HeaderView: View {
                 .buttonStyle(CircleGlassButtonStyle())
                 .help("Storage: \(modelManager.currentHubPath)")
                 
-                // Dashboard
                 Button(action: { showModelDashboard = true }) {
                     Image(systemName: "cpu")
                         .font(.system(size: 14, weight: .medium))
@@ -256,7 +285,6 @@ struct HeaderView: View {
                 .buttonStyle(CircleGlassButtonStyle())
                 .help("Model Dashboard")
                 
-                // Model Selector Pill
                 HStack {
                     Text("Model")
                         .font(.system(size: 12, weight: .medium))
@@ -291,13 +319,20 @@ struct TranslationCard<Actions: View>: View {
     let isReadOnly: Bool
     let placeholder: String
     var textColor: Color = .primary
+    let containerWidth: CGFloat
     @ViewBuilder let actions: Actions
+    
+    private var fontSize: CGFloat {
+        let base: CGFloat = 28
+        let scaled = containerWidth / 40
+        return max(18, min(base, scaled))
+    }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text(title)
-                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .semibold, design: .rounded))
                     .foregroundColor(.primary.opacity(0.6))
                 
                 Spacer()
@@ -308,46 +343,53 @@ struct TranslationCard<Actions: View>: View {
             if isReadOnly {
                 ScrollView {
                     Text(text.isEmpty ? placeholder : text)
-                        .font(.system(size: 28, weight: .medium, design: .rounded))
+                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
                 }
             } else {
-                TextEditor(text: $text)
-                    .font(.system(size: 28, weight: .medium, design: .rounded))
-                    .foregroundColor(.primary)
-                    .scrollContentBackground(.hidden)
-                    .overlay(alignment: .topLeading) {
-                        if text.isEmpty {
-                            Text(placeholder)
-                                .font(.system(size: 28, weight: .medium, design: .rounded))
-                                .foregroundColor(.secondary.opacity(0.3))
-                                .padding(.top, 8)
-                                .padding(.leading, 5)
-                                .allowsHitTesting(false)
+                ScrollView {
+                    TextEditor(text: $text)
+                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                        .foregroundColor(.primary)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 200)
+                        .overlay(alignment: .topLeading) {
+                            if text.isEmpty {
+                                Text(placeholder)
+                                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary.opacity(0.3))
+                                    .padding(.top, 8)
+                                    .padding(.leading, 5)
+                                    .allowsHitTesting(false)
+                            }
                         }
-                    }
+                }
             }
         }
-        .padding(32)
+        .padding(geometryPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 32)
+            RoundedRectangle(cornerRadius: 24)
                 .fill(.ultraThinMaterial)
                 .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 10)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 32)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(Color.white.opacity(0.15), lineWidth: 1)
         )
+    }
+    
+    private var geometryPadding: CGFloat {
+        containerWidth > 1200 ? 40 : 24
     }
 }
 
 struct GlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 14, weight: .medium))
+            .font(.system(size: 13, weight: .medium))
             .padding(8)
             .background(Circle().fill(.ultraThinMaterial))
             .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
@@ -359,7 +401,7 @@ struct GlassButtonStyle: ButtonStyle {
 struct CircleGlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .frame(width: 36, height: 36)
+            .frame(width: 32, height: 32)
             .background(Circle().fill(.ultraThinMaterial))
             .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
             .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
@@ -443,4 +485,5 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.blendingMode = blendingMode
     }
 }
+
 
