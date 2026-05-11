@@ -17,6 +17,7 @@ public class ModelManager: ObservableObject {
     @Published public var isDownloading = false
     @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
+    private let logger = AppLogger.service("ModelManager")
     private var hub: HubApi { AppConfiguration.hub }
     
     public init() {
@@ -115,19 +116,30 @@ public class ModelManager: ObservableObject {
     }
     
     public func deleteModel(modelId: String) {
-        let repo = Hub.Repo(id: modelId)
-        let path = hub.localRepoLocation(repo)
+        let hubPath = AppConfiguration.currentHubPath
         
-        do {
-            if FileManager.default.fileExists(atPath: path.path) {
-                try FileManager.default.removeItem(at: path)
-                if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                    self.models[index].isDownloaded = false
-                    self.models[index].downloadProgress = 0
+        // Construct potential paths for modern layout, legacy layout, and locks
+        let modernId = "models--" + modelId.replacingOccurrences(of: "/", with: "--")
+        let modernRepoPath = hubPath.appendingPathComponent(modernId)
+        let legacyPath = hubPath.appendingPathComponent("models").appendingPathComponent(modelId)
+        let lockPath = hubPath.appendingPathComponent(".locks").appendingPathComponent(modernId)
+        
+        let pathsToDelete = [modernRepoPath, legacyPath, lockPath]
+        
+        for path in pathsToDelete {
+            do {
+                if FileManager.default.fileExists(atPath: path.path) {
+                    try FileManager.default.removeItem(at: path)
+                    logger.info("Deleted model resource at: \(path.path)")
                 }
+            } catch {
+                logger.error("Failed to delete model resource at \(path.path): \(error.localizedDescription)")
             }
-        } catch {
-            print("Failed to delete model: \(error)")
+        }
+        
+        if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+            self.models[index].isDownloaded = false
+            self.models[index].downloadProgress = 0
         }
     }
 }

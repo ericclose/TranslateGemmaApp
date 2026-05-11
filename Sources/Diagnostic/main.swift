@@ -1,37 +1,27 @@
 import Foundation
-import MLX
-import MLXLLM
 import TranslateGemmaLibrary
+import Hub
 
 @main
 struct Diagnostic {
     static func main() async {
-        print("--- TranslateGemma Diagnostic Tool ---")
-        let service = TranslationService()
+        print("--- TranslateGemma Path Debug ---")
         let modelId = "mlx-community/translategemma-4b-it-4bit"
         
-        print("1. Initializing GPU...")
-        MLX.Memory.cacheLimit = 2 * 1024 * 1024 * 1024 // Use a smaller limit for diagnostic
+        let manager = await ModelManager()
+        let hubPath = URL(fileURLWithPath: manager.currentHubPath)
         
-        print("2. Loading Model: \(modelId)...")
-        do {
-            try await service.loadModel(modelId: modelId)
-            print("SUCCESS: Model loaded.")
-        } catch {
-            print("ERROR during loadModel: \(error)")
-            return
-        }
+        // 1. Legacy path
+        let legacyPath = hubPath.appendingPathComponent("models").appendingPathComponent(modelId)
+        print("Legacy Path: \(legacyPath.path)")
+        print("Exists: \(FileManager.default.fileExists(atPath: legacyPath.path))")
         
-        print("3. Testing Translation: 'Hello'...")
-        do {
-            let result = try await service.translate(text: "Hello", sourceLang: "English", targetLang: "Chinese")
-            print("SUCCESS: Translation result: '\(result)'")
-        } catch {
-            print("ERROR during translate: \(error)")
-        }
+        // 2. Modern path
+        let modernId = "models--" + modelId.replacingOccurrences(of: "/", with: "--")
+        let modernPath = hubPath.appendingPathComponent(modernId)
+        print("Modern Path: \(modernPath.path)")
+        print("Exists: \(FileManager.default.fileExists(atPath: modernPath.path))")
         
-        print("--- Diagnostic Finished ---")
-        // Give background threads a moment to clean up before process exit
-        try? await Task.sleep(nanoseconds: 1_000_000_000)
+        print("--- End Path Debug ---")
     }
 }

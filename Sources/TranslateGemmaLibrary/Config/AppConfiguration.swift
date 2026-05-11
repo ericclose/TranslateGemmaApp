@@ -66,10 +66,9 @@ public enum AppConfiguration {
         return nil
     }
     
-    /// Thoroughly checks if a model is fully downloaded.
+    /// Thoroughly checks if a model is fully downloaded, supporting both legacy and modern layouts.
     public static func isModelFullyDownloaded(modelId: String) -> Bool {
-        let repo = Hub.Repo(id: modelId)
-        let path = hub.localRepoLocation(repo)
+        let path = getLocalModelPath(modelId: modelId)
         
         let essentialFiles = [
             "config.json",
@@ -90,6 +89,32 @@ public enum AppConfiguration {
         
         return FileManager.default.fileExists(atPath: safetensors.path) || 
                FileManager.default.fileExists(atPath: index.path)
+    }
+    
+    /// Gets the actual local path of a model, checking both legacy and modern layouts.
+    /// In modern layout, it resolves to the latest snapshot directory.
+    public static func getLocalModelPath(modelId: String) -> URL {
+        let hubPath = currentHubPath
+        
+        // 1. Check for Modern layout: models--author--repo
+        let modernId = "models--" + modelId.replacingOccurrences(of: "/", with: "--")
+        let modernRepoPath = hubPath.appendingPathComponent(modernId)
+        let snapshotsPath = modernRepoPath.appendingPathComponent("snapshots")
+        
+        if FileManager.default.fileExists(atPath: snapshotsPath.path),
+           let snapshots = try? FileManager.default.contentsOfDirectory(atPath: snapshotsPath.path),
+           let latestSnapshot = snapshots.sorted().last {
+            return snapshotsPath.appendingPathComponent(latestSnapshot)
+        }
+        
+        // 2. Check for Legacy layout: models/author/repo
+        let legacyPath = hubPath.appendingPathComponent("models").appendingPathComponent(modelId)
+        if FileManager.default.fileExists(atPath: legacyPath.path) {
+            return legacyPath
+        }
+        
+        // Fallback to library default
+        return hub.localRepoLocation(Hub.Repo(id: modelId))
     }
 }
 
