@@ -288,11 +288,14 @@ struct HeaderView: View {
     
     var body: some View {
         HStack(spacing: 20) {
-            Text("TranslateGemma")
-                .font(.system(size: 24, weight: .black, design: .rounded))
-                .foregroundStyle(
-                    LinearGradient(colors: [.primary.opacity(0.8), .primary.opacity(0.5)], startPoint: .top, endPoint: .bottom)
-                )
+            HStack(spacing: 0) {
+                Text("Translate")
+                    .foregroundStyle(.primary)
+                Text("Gemma")
+                    .foregroundStyle(.blue)
+            }
+            .font(.system(size: 28, weight: .black, design: .rounded))
+            .shadow(color: .black.opacity(0.05), radius: 4, x: 0, y: 2)
             
             Spacer()
             
