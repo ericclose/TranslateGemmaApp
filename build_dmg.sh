@@ -2,7 +2,9 @@
 set -e
 
 APP_NAME="TranslateGemmaApp"
-VERSION=${1:-"1.2.1-beta"}
+# Read default version from Info.plist
+DEFAULT_VERSION=$(plutil -extract CFBundleShortVersionString raw Sources/TranslateGemmaApp/Resources/Info.plist)
+VERSION=${1:-$DEFAULT_VERSION}
 ARCH=$(uname -m)
 DMG_NAME="${APP_NAME}-${ARCH}-v${VERSION}.dmg"
 
@@ -63,6 +65,8 @@ echo "🚚 Step 4: Copying binaries and resources..."
 S4_START=$(get_time)
 cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
+# Inject the chosen version into the bundle's Info.plist
+plutil -replace CFBundleShortVersionString -string "$VERSION" "${APP_BUNDLE}/Contents/Info.plist"
 cp "build/default.metallib" "${APP_BUNDLE}/Contents/Resources/"
 if [ ! -f "${APP_BUNDLE}/Contents/Resources/default.metallib" ]; then
     echo "❌ Error: metallib failed to copy."
