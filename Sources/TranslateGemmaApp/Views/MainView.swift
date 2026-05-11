@@ -297,39 +297,10 @@ struct HeaderView: View {
             Spacer()
             
             HStack(spacing: 12) {
-                Button(action: { modelManager.selectCustomHubPath() }) {
-                    Image(systemName: "folder.badge.gearshape")
-                }
-                .buttonStyle(OrnamentButtonStyle())
-                
                 Button(action: { showModelDashboard = true }) {
                     Image(systemName: "cpu.fill")
                 }
                 .buttonStyle(OrnamentButtonStyle())
-                
-                HStack(spacing: 10) {
-                    Image(systemName: "brain.head.profile.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(.blue)
-                    
-                    let downloadedModels = modelManager.models.filter { $0.isDownloaded }
-                    Picker("", selection: $selectedModelId) {
-                        if downloadedModels.isEmpty {
-                            Text("No Models").tag("")
-                        } else {
-                            ForEach(downloadedModels) { model in
-                                Text(model.name).tag(model.id)
-                            }
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(width: 260)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Capsule().fill(.ultraThinMaterial))
-                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
             }
         }
     }
@@ -503,23 +474,16 @@ struct ModelDashboardView: View {
                 ScrollView {
                     VStack(spacing: 16) {
                         ForEach(modelManager.models) { model in
-                            ModelRowView(model: model, modelManager: modelManager, isSelected: model.id == selectedModelId)
+                            ModelRowView(
+                                model: model,
+                                modelManager: modelManager,
+                                selectedModelId: $selectedModelId
+                            )
                         }
                     }
                     .padding(.horizontal, 32)
                 }
-                
-                HStack {
-                    Image(systemName: "folder.fill").foregroundColor(.blue)
-                    Text(modelManager.currentHubPath).font(.system(size: 12, weight: .semibold, design: .monospaced)).foregroundColor(.secondary).lineLimit(1)
-                    Spacer()
-                    Button(action: { modelManager.selectCustomHubPath() }) {
-                        Text("Change Location").font(.system(size: 12, weight: .bold))
-                    }
-                    .buttonStyle(.link)
-                }
-                .padding(24)
-                .background(.ultraThinMaterial)
+                .padding(.bottom, 32)
             }
         }
         .frame(width: 650, height: 600)
@@ -529,7 +493,13 @@ struct ModelDashboardView: View {
 struct ModelRowView: View {
     let model: ModelInfo
     @ObservedObject var modelManager: ModelManager
-    let isSelected: Bool
+    @Binding var selectedModelId: String
+    
+    @State private var showDeleteConfirmation = false
+    
+    var isSelected: Bool {
+        model.id == selectedModelId
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -557,11 +527,22 @@ struct ModelRowView: View {
             
             if model.isDownloaded {
                 HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundColor(.green)
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill").font(.system(size: 18)).foregroundColor(.blue)
+                    }
+                    
                     Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
                         Image(systemName: "folder").font(.system(size: 14, weight: .semibold)).padding(8).background(Circle().fill(.primary.opacity(0.05)))
                     }
                     .buttonStyle(.plain)
+                    .help("Reveal in Finder")
+                    
+                    Button(action: { showDeleteConfirmation = true }) {
+                        Image(systemName: "trash").font(.system(size: 14, weight: .semibold)).padding(8).background(Circle().fill(.red.opacity(0.1)))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundColor(.red)
+                    .help("Delete Model")
                 }
             } else if modelManager.isDownloading && model.downloadProgress > 0 && model.downloadProgress < 1.0 {
                 VStack(alignment: .trailing, spacing: 6) {
@@ -601,6 +582,23 @@ struct ModelRowView: View {
             RoundedRectangle(cornerRadius: 16)
                 .stroke(isSelected ? Color.blue.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
         )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if model.isDownloaded {
+                selectedModelId = model.id
+            }
+        }
+        .alert("Confirm Deletion", isPresented: $showDeleteConfirmation) {
+            Button("Delete", role: .destructive) {
+                modelManager.deleteModel(modelId: model.id)
+                if isSelected {
+                    selectedModelId = ""
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to delete \(model.name)? This action cannot be undone.")
+        }
     }
 }
 

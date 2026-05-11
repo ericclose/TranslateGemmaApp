@@ -114,28 +114,20 @@ public class ModelManager: ObservableObject {
         }
     }
     
-    public func selectCustomHubPath() {
-        let panel = NSOpenPanel()
-        panel.canChooseDirectories = true
-        panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.message = "Please select the Hugging Face Hub storage directory)"
-        panel.prompt = "Select Directory"
+    public func deleteModel(modelId: String) {
+        let repo = Hub.Repo(id: modelId)
+        let path = hub.localRepoLocation(repo)
         
-        if panel.runModal() == .OK, let url = panel.url {
-            AppConfiguration.updateHubPath(url)
-            self.currentHubPath = url.path
-            Task {
-                await fetchCollectionModels()
+        do {
+            if FileManager.default.fileExists(atPath: path.path) {
+                try FileManager.default.removeItem(at: path)
+                if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+                    self.models[index].isDownloaded = false
+                    self.models[index].downloadProgress = 0
+                }
             }
-        }
-    }
-    
-    public func resetToDefaultHubPath() {
-        AppConfiguration.resetHubPath()
-        self.currentHubPath = AppConfiguration.currentHubPath.path
-        Task {
-            await fetchCollectionModels()
+        } catch {
+            print("Failed to delete model: \(error)")
         }
     }
 }
