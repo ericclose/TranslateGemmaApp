@@ -187,7 +187,9 @@ struct MainView: View {
             }
             
             do {
+                NSLog("TranslateGemma: UI calling translateAction for model: \(modelIdToUse)")
                 try await translationService.loadModel(modelId: modelIdToUse)
+                NSLog("TranslateGemma: Model loaded successfully, starting translation...")
                 
                 if let fileURL = importedFileURL {
                     // Use TranslationController for file-based processing
@@ -196,9 +198,12 @@ struct MainView: View {
                     }
                 } else {
                     // Just translate the editor text
+                    NSLog("TranslateGemma: Calling translationService.translate for text input...")
                     outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
                 }
+                NSLog("TranslateGemma: Translation task completed.")
             } catch {
+                NSLog("TranslateGemma: Caught translation error: \(error.localizedDescription)")
                 print("Translation error: \(error)")
                 errorMessage = error.localizedDescription
                 showErrorAlert = true

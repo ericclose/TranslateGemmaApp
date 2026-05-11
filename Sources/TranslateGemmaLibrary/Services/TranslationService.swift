@@ -117,9 +117,10 @@ public class TranslationService: ObservableObject {
         
         let input: LMInput
         do {
+            NSLog("TranslateGemma: Preparing structured input...")
             input = try await container.prepare(input: UserInput(messages: structuredMessages))
         } catch {
-            logger.warning("Failed to prepare structured input, falling back to plain text: \(error.localizedDescription)")
+            NSLog("TranslateGemma: Structured input failed, trying plain text fallback...")
             input = try await container.prepare(input: UserInput(messages: messages))
         }
         
@@ -130,13 +131,13 @@ public class TranslationService: ObservableObject {
             logToFile("Starting generation with text length: \(text.count)")
             let parameters = GenerateParameters(maxTokens: 1024, repetitionPenalty: nil)
             
-            logToFile("Calling container.generate...")
+            NSLog("TranslateGemma: Calling container.generate...")
             // Generation must happen off-main-thread
             let stream = try await Task.detached(priority: .userInitiated) {
                 try await container.generate(input: input, parameters: parameters)
             }.value
             
-            logToFile("Iterating stream...")
+            NSLog("TranslateGemma: Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
                     // Gemma 3 manual EOS check - more robust detection
