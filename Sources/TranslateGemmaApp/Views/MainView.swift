@@ -69,7 +69,11 @@ struct MainView: View {
                     AdaptiveLayout(width: geometry.size.width) {
                         // Source Card
                         TranslationCard(
-                            title: importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect",
+                            title: {
+                                Text(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect")
+                                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                                    .foregroundColor(.secondary)
+                            },
                             text: $inputText,
                             isReadOnly: false,
                             placeholder: "Type something...",
@@ -94,23 +98,22 @@ struct MainView: View {
                         
                         // Target Card
                         TranslationCard(
-                            title: targetLanguage,
-                            text: .constant(outputText),
-                            isReadOnly: true,
-                            placeholder: "Translation will appear here",
-                            textColor: .blue,
-                            containerWidth: geometry.size.width,
-                            centerView: {
+                            title: {
                                 Picker("", selection: $targetLanguage) {
                                     ForEach(languages, id: \.self) { lang in
                                         Text(lang).tag(lang)
                                     }
                                 }
                                 .pickerStyle(.menu)
-                                .frame(width: 110)
+                                .frame(width: 100)
                                 .labelsHidden()
                                 .background(Capsule().fill(.ultraThinMaterial))
                             },
+                            text: .constant(outputText),
+                            isReadOnly: true,
+                            placeholder: "Translation will appear here",
+                            textColor: .blue,
+                            containerWidth: geometry.size.width,
                             actions: {
                                 HStack(spacing: 12) {
                                     Button(action: copyToClipboard) {
@@ -267,28 +270,26 @@ struct HeaderView: View {
     var body: some View {
         HStack(spacing: 20) {
             Text("TranslateGemma")
-                .font(.system(size: 22, weight: .bold, design: .rounded))
-                .foregroundColor(.primary.opacity(0.8))
+                .font(.system(size: 20, weight: .bold, design: .rounded))
+                .foregroundColor(.primary.opacity(0.9))
             
             Spacer()
             
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button(action: { modelManager.selectCustomHubPath() }) {
                     Image(systemName: "folder")
                 }
                 .buttonStyle(CircleGlassButtonStyle())
-                .help("Storage: \(modelManager.currentHubPath)")
                 
                 Button(action: { showModelDashboard = true }) {
                     Image(systemName: "cpu")
                 }
                 .buttonStyle(CircleGlassButtonStyle())
-                .help("Model Dashboard")
                 
                 HStack(spacing: 8) {
-                    Image(systemName: "brain.head.profile") // Replaced "Model" text with AI icon
+                    Image(systemName: "brain.head.profile")
                         .font(.system(size: 14))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(.blue.opacity(0.8))
                     
                     let downloadedModels = modelManager.models.filter { $0.isDownloaded }
                     Picker("", selection: $selectedModelId) {
@@ -302,10 +303,10 @@ struct HeaderView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .frame(width: 200)
+                    .frame(width: 180)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
                 .background(Capsule().fill(.ultraThinMaterial))
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
             }
@@ -313,60 +314,31 @@ struct HeaderView: View {
     }
 }
 
-struct TranslationCard<Actions: View, Center: View>: View {
-    let title: String
+struct TranslationCard<HeaderTitle: View, Actions: View>: View {
+    @ViewBuilder let title: HeaderTitle
     @Binding var text: String
     let isReadOnly: Bool
     let placeholder: String
     var textColor: Color = .primary
     let containerWidth: CGFloat
-    @ViewBuilder let centerView: Center
     @ViewBuilder let actions: Actions
     
-    init(
-        title: String,
-        text: Binding<String>,
-        isReadOnly: Bool,
-        placeholder: String,
-        textColor: Color = .primary,
-        containerWidth: CGFloat,
-        @ViewBuilder centerView: () -> Center = { EmptyView() },
-        @ViewBuilder actions: () -> Actions
-    ) {
-        self.title = title
-        self._text = text
-        self.isReadOnly = isReadOnly
-        self.placeholder = placeholder
-        self.textColor = textColor
-        self.containerWidth = containerWidth
-        self.centerView = centerView()
-        self.actions = actions()
-    }
-    
     private var fontSize: CGFloat {
-        let base: CGFloat = 18 // Reduced for better balance
-        let scaled = containerWidth / 60
+        let base: CGFloat = 18
+        let scaled = containerWidth / 65
         return max(14, min(base, scaled))
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            // Header with absolute centering for CenterView
-            ZStack {
-                HStack {
-                    Text(title)
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    actions
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                }
+            HStack(alignment: .center) {
+                title
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 
-                centerView
-                    .frame(maxWidth: .infinity, alignment: .center)
+                actions
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .frame(height: 32)
+            .frame(height: 28)
             
             if isReadOnly {
                 ScrollView {
@@ -375,45 +347,48 @@ struct TranslationCard<Actions: View, Center: View>: View {
                         .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
-                        .padding(.top, 8)
-                        .padding(.horizontal, 5)
+                        .padding(.top, 4)
+                        .padding(.horizontal, 4)
                 }
             } else {
                 ZStack(alignment: .topLeading) {
-                    TextEditor(text: $text)
-                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                        .foregroundColor(.primary)
-                        .scrollContentBackground(.hidden)
-                        .frame(minHeight: 200)
-                    
+                    // Placeholder behind or on top with exact alignment
                     if text.isEmpty {
                         Text(placeholder)
                             .font(.system(size: fontSize, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary.opacity(0.3))
-                            .padding(.top, 8) // Pixel-perfect alignment for macOS TextEditor
-                            .padding(.leading, 5)
+                            .padding(.top, 5) // Critical alignment fix for macOS TextEditor
+                            .padding(.leading, 4) // Critical alignment fix for macOS TextEditor
                             .allowsHitTesting(false)
                     }
+                    
+                    TextEditor(text: $text)
+                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                        .foregroundColor(.primary)
+                        .scrollContentBackground(.hidden)
+                        .lineSpacing(0)
                 }
+                .frame(minHeight: 200)
             }
         }
         .padding(geometryPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 20)
+            RoundedRectangle(cornerRadius: 18)
                 .fill(.ultraThinMaterial)
-                .shadow(color: Color.black.opacity(0.05), radius: 15, x: 0, y: 8)
+                .shadow(color: Color.black.opacity(0.04), radius: 12, x: 0, y: 6)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(Color.white.opacity(0.15), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.12), lineWidth: 1)
         )
     }
     
     private var geometryPadding: CGFloat {
-        containerWidth > 1200 ? 32 : 20
+        containerWidth > 1200 ? 28 : 16
     }
 }
+
 
 struct GlassButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
