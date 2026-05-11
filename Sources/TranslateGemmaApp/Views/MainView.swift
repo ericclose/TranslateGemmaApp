@@ -50,26 +50,19 @@ struct MainView: View {
                     }
                     
                     Button(action: { modelManager.selectCustomHubPath() }) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            Text("存储位置")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.secondary)
-                            Text(modelManager.currentHubPath)
-                                .font(.system(size: 10, design: .monospaced))
-                                .frame(width: 150, alignment: .trailing)
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                        }
+                        Image(systemName: "internaldrive")
+                            .font(.title2)
+                            .foregroundColor(.secondary)
                     }
                     .buttonStyle(.plain)
-                    .help("点击更改全局 Hub 存储路径: \(modelManager.currentHubPath)")
+                    .help("Global Hub Storage Path: \(modelManager.currentHubPath)\nClick to change.")
                     
                     Button(action: { showModelDashboard = true }) {
                         Image(systemName: "cpu")
                             .font(.title2)
                     }
                     .buttonStyle(.plain)
-                    .help("模型管理")
+                    .help("Model Management")
                 }
                 .padding(.horizontal)
                 .padding(.top)

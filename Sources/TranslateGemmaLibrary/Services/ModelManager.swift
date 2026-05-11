@@ -95,8 +95,8 @@ public class ModelManager: ObservableObject {
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "请选择 Hugging Face Hub 的统一存储目录（例如 ~/.cache/huggingface/hub 或外置盘路径）"
-        panel.prompt = "选择目录"
+        panel.message = "Please select the unified Hugging Face Hub storage directory (e.g., ~/.cache/huggingface/hub or an external drive path)"
+        panel.prompt = "Select Directory"
         
         if panel.runModal() == .OK, let url = panel.url {
             AppConfiguration.updateHubPath(url)
