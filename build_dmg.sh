@@ -68,6 +68,16 @@ cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 # Inject the chosen version into the bundle's Info.plist
 plutil -replace CFBundleShortVersionString -string "$VERSION" "${APP_BUNDLE}/Contents/Info.plist"
 cp "build/default.metallib" "${APP_BUNDLE}/Contents/Resources/"
+
+# 4.1: Sandbox Hardening - Remove Xcode-specific RPATHs that cause crashes
+echo "🧹 Step 4.1: Cleaning up RPATHs for Sandbox compliance..."
+# We remove the common Xcode Swift compatibility paths that break sandbox
+XCODE_SWIFT_PATH="/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-6.2/macosx"
+install_name_tool -delete_rpath "$XCODE_SWIFT_PATH" "${APP_BUNDLE}/Contents/MacOS/${APP_NAME}" 2>/dev/null || true
+
+# 4.2: Copy auxiliary bundles (e.g. Transformers/Hub resources)
+cp -r .build/release/*.bundle "${APP_BUNDLE}/Contents/Resources/" 2>/dev/null || true
+
 if [ ! -f "${APP_BUNDLE}/Contents/Resources/default.metallib" ]; then
     echo "❌ Error: metallib failed to copy."
     exit 1
