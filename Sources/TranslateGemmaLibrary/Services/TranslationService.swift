@@ -23,6 +23,9 @@ public class TranslationService: ObservableObject {
     public func loadModel(modelId: String) async throws {
         logger.info("🏗️ TranslationService: Entering loadModel for \(modelId, privacy: .public)")
         
+        await MainActor.run { self.isTranslating = true }
+        defer { Task { @MainActor in self.isTranslating = false } }
+        
         let physicalMemory = ProcessInfo.processInfo.physicalMemory
         MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.6)
         
@@ -53,6 +56,9 @@ public class TranslationService: ObservableObject {
     }
     
     public func translate(text: String, sourceLang: String?, targetLang: String) async throws -> String {
+        await MainActor.run { self.isTranslating = true }
+        defer { Task { @MainActor in self.isTranslating = false } }
+        
         guard let container = modelContainer else {
             logger.error("Attempted to translate without model loaded")
             throw NSError(domain: "TranslationService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
@@ -71,7 +77,6 @@ public class TranslationService: ObservableObject {
         logger.info("Using language codes: \(sCode, privacy: .public) -> \(tCode, privacy: .public)")
         
         // Gemma 3 TranslateGemma requires a specific structured content format
-        // Some versions of MLXLLM prefer a single dictionary for content if it's text-only
         let content: [String: Any] = [
             "type": "text",
             "text": text,
@@ -82,11 +87,10 @@ public class TranslationService: ObservableObject {
         let messages: [[String: Any]] = [
             [
                 "role": "user",
-                "content": text // Fallback to plain text if structured content fails
+                "content": text
             ]
         ]
         
-        // Let's try to prepare with structured content first
         let structuredMessages: [[String: Any]] = [
             [
                 "role": "user",
@@ -103,7 +107,6 @@ public class TranslationService: ObservableObject {
             input = try await container.prepare(input: UserInput(messages: messages))
         }
         
-        await MainActor.run { self.isTranslating = true }
         var outputText = ""
         
         do {
@@ -117,7 +120,6 @@ public class TranslationService: ObservableObject {
             logger.info("TranslateGemma: Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
-                    // Stop sequences detection
                     let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                     if stopSequences.contains(where: { text.contains($0) }) {
                         break
@@ -132,11 +134,9 @@ public class TranslationService: ObservableObject {
             }
         } catch {
             logger.error("Generation error: \(error.localizedDescription, privacy: .public)")
-            await MainActor.run { self.isTranslating = false }
             throw error
         }
         
-        await MainActor.run { self.isTranslating = false }
         return outputText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
