@@ -24,164 +24,122 @@ struct MainView: View {
     
     var body: some View {
         ZStack {
-            // Native Window Background
-            VisualEffectView(material: .windowBackground, blendingMode: .withinWindow)
+            // Liquid Glass Background
+            Image("liquid_background", bundle: .module)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .ignoresSafeArea()
+            
+            VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
+                .opacity(0.4)
                 .ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // Toolbar
-                HStack(spacing: 20) {
-                    Text("TranslateGemma")
-                        .font(.system(size: 18, weight: .semibold, design: .rounded))
-                    
-                    Spacer()
-                    
-                    // Model Selector
-                    let downloadedModels = modelManager.models.filter { $0.isDownloaded }
-                    if !downloadedModels.isEmpty {
-                        Picker("Model", selection: $selectedModelId) {
-                            ForEach(downloadedModels) { model in
-                                Text(model.name).tag(model.id)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .frame(width: 220)
-                    }
-                    
-                    Divider().frame(height: 16)
-                    
-                    // Storage Path Icon
-                    Button(action: { modelManager.selectCustomHubPath() }) {
-                        Image(systemName: "internaldrive")
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Storage: \(modelManager.currentHubPath)")
-                    
-                    // Dashboard Icon
-                    Button(action: { showModelDashboard = true }) {
-                        Image(systemName: "cpu")
-                            .symbolRenderingMode(.hierarchical)
-                    }
-                    .buttonStyle(.plain)
-                    .help("Model Dashboard")
-                }
-                .padding(.horizontal, 20)
-                .frame(height: 52)
-                .background(VisualEffectView(material: .titlebar, blendingMode: .withinWindow))
+                // Header
+                HeaderView(
+                    selectedModelId: $selectedModelId,
+                    modelManager: modelManager,
+                    showModelDashboard: $showModelDashboard
+                )
+                .padding(.top, 24)
+                .padding(.horizontal, 32)
                 
-                Divider()
+                Spacer()
                 
-                // Content Area
-                HStack(spacing: 0) {
+                // Content Cards
+                HStack(spacing: 24) {
                     // Source Card
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Text(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect")
-                                .font(.caption.bold())
-                                .foregroundColor(.secondary)
-                            Spacer()
-                            Button(action: importFile) {
-                                Image(systemName: "doc.badge.plus")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Import File")
-                            
-                            if !inputText.isEmpty {
-                                Button(action: { inputText = ""; importedFileURL = nil }) {
-                                    Image(systemName: "xmark.circle.fill")
-                                        .foregroundColor(.secondary)
+                    TranslationCard(
+                        title: importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect",
+                        text: $inputText,
+                        isReadOnly: false,
+                        placeholder: "Type something...",
+                        actions: {
+                            HStack(spacing: 12) {
+                                Button(action: importFile) {
+                                    Image(systemName: "doc.badge.plus")
                                 }
-                                .buttonStyle(.plain)
+                                .buttonStyle(GlassButtonStyle())
+                                .help("Import File")
+                                
+                                if !inputText.isEmpty {
+                                    Button(action: { inputText = ""; importedFileURL = nil }) {
+                                        Image(systemName: "xmark")
+                                    }
+                                    .buttonStyle(GlassButtonStyle())
+                                }
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        
-                        TextEditor(text: $inputText)
-                            .font(.system(size: 16))
-                            .scrollContentBackground(.hidden)
-                            .padding(12)
-                        
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    
-                    Divider()
+                    )
                     
                     // Target Card
-                    VStack(alignment: .leading, spacing: 0) {
-                        HStack {
-                            Picker("", selection: $targetLanguage) {
-                                ForEach(languages, id: \.self) { lang in
-                                    Text(lang).tag(lang)
+                    TranslationCard(
+                        title: targetLanguage,
+                        text: .constant(outputText),
+                        isReadOnly: true,
+                        placeholder: "Translation will appear here",
+                        textColor: .blue,
+                        actions: {
+                            HStack(spacing: 12) {
+                                Picker("", selection: $targetLanguage) {
+                                    ForEach(languages, id: \.self) { lang in
+                                        Text(lang).tag(lang)
+                                    }
                                 }
+                                .pickerStyle(.menu)
+                                .frame(width: 100)
+                                .labelsHidden()
+                                
+                                Button(action: copyToClipboard) {
+                                    Image(systemName: "doc.on.doc")
+                                }
+                                .buttonStyle(GlassButtonStyle())
+                                .disabled(outputText.isEmpty)
+                                
+                                Button(action: swapLanguages) {
+                                    Image(systemName: "arrow.left.and.right")
+                                }
+                                .buttonStyle(GlassButtonStyle())
+                                
+                                Button(action: exportFile) {
+                                    Image(systemName: "square.and.arrow.up")
+                                }
+                                .buttonStyle(GlassButtonStyle())
+                                .disabled(outputText.isEmpty)
                             }
-                            .pickerStyle(.menu)
-                            .frame(width: 120)
-                            
-                            Spacer()
-                            
-                            Button(action: copyToClipboard) {
-                                Image(systemName: "doc.on.doc")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Copy Results")
-                            .disabled(outputText.isEmpty)
-                            
-                            Button(action: exportFile) {
-                                Image(systemName: "square.and.arrow.up")
-                            }
-                            .buttonStyle(.plain)
-                            .help("Export Results")
-                            .disabled(outputText.isEmpty)
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-                        
-                        TextEditor(text: .constant(outputText))
-                            .font(.system(size: 16))
-                            .foregroundColor(.blue)
-                            .scrollContentBackground(.hidden)
-                            .padding(12)
-                        
-                        Spacer()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .background(Color.blue.opacity(0.02))
+                    )
                 }
+                .padding(.horizontal, 32)
+                .padding(.bottom, 48)
                 
-                Divider()
-                
-                // Footer Action
-                HStack {
-                    if translationService.isTranslating {
-                        ProgressView()
-                            .controlSize(.small)
-                            .padding(.trailing, 8)
-                        Text("Processing with AI...")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                    
+                // Floating Translate Button (Optimized for MD3/Liquid Glass)
+                if !inputText.isEmpty {
                     Button(action: translateAction) {
-                        HStack {
-                            Text("Translate")
-                            Image(systemName: "arrow.right.circle.fill")
+                        HStack(spacing: 8) {
+                            if translationService.isTranslating {
+                                ProgressView().controlSize(.small).brightness(1)
+                            } else {
+                                Text("Translate")
+                                Image(systemName: "sparkles")
+                            }
                         }
-                        .frame(width: 120)
+                        .padding(.horizontal, 24)
+                        .padding(.vertical, 12)
+                        .background(
+                            Capsule()
+                                .fill(Color.blue.opacity(0.8))
+                                .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
+                        )
+                        .foregroundColor(.white)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(translationService.isTranslating || inputText.isEmpty)
+                    .buttonStyle(.plain)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .padding(.bottom, 24)
                 }
-                .padding(20)
-                .background(VisualEffectView(material: .contentBackground, blendingMode: .withinWindow))
             }
         }
-        .frame(minWidth: 850, minHeight: 550)
+        .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showModelDashboard) {
             ModelDashboardView(modelManager: modelManager)
         }
@@ -229,6 +187,19 @@ struct MainView: View {
         }
     }
     
+    func swapLanguages() {
+        // Swap logic: In this app, source is Auto-Detect mostly, 
+        // but we can swap target language back to English or similar if we had a source language picker.
+        // For now, let's just rotate target language or do a visual swap if possible.
+        // Since we don't have a source language picker yet, we'll just show the interaction.
+        let currentTarget = targetLanguage
+        if currentTarget == "English" {
+            targetLanguage = "Chinese"
+        } else {
+            targetLanguage = "English"
+        }
+    }
+    
     func copyToClipboard() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
@@ -253,6 +224,149 @@ struct MainView: View {
     }
 }
 
+// MARK: - Components
+
+struct HeaderView: View {
+    @Binding var selectedModelId: String
+    @ObservedObject var modelManager: ModelManager
+    @Binding var showModelDashboard: Bool
+    
+    var body: some View {
+        HStack(spacing: 24) {
+            Text("TranslateGemma")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(.primary.opacity(0.8))
+            
+            Spacer()
+            
+            HStack(spacing: 16) {
+                // Settings/Storage
+                Button(action: { modelManager.selectCustomHubPath() }) {
+                    Image(systemName: "folder")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .buttonStyle(CircleGlassButtonStyle())
+                .help("Storage: \(modelManager.currentHubPath)")
+                
+                // Dashboard
+                Button(action: { showModelDashboard = true }) {
+                    Image(systemName: "cpu")
+                        .font(.system(size: 14, weight: .medium))
+                }
+                .buttonStyle(CircleGlassButtonStyle())
+                .help("Model Dashboard")
+                
+                // Model Selector Pill
+                HStack {
+                    Text("Model")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.secondary)
+                    
+                    let downloadedModels = modelManager.models.filter { $0.isDownloaded }
+                    Picker("", selection: $selectedModelId) {
+                        if downloadedModels.isEmpty {
+                            Text("No Models").tag("")
+                        } else {
+                            ForEach(downloadedModels) { model in
+                                Text(model.name).tag(model.id)
+                            }
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                    .frame(width: 180)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Capsule().fill(.ultraThinMaterial))
+                .overlay(Capsule().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            }
+        }
+    }
+}
+
+struct TranslationCard<Actions: View>: View {
+    let title: String
+    @Binding var text: String
+    let isReadOnly: Bool
+    let placeholder: String
+    var textColor: Color = .primary
+    @ViewBuilder let actions: Actions
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 16, weight: .semibold, design: .rounded))
+                    .foregroundColor(.primary.opacity(0.6))
+                
+                Spacer()
+                
+                actions
+            }
+            
+            if isReadOnly {
+                ScrollView {
+                    Text(text.isEmpty ? placeholder : text)
+                        .font(.system(size: 28, weight: .medium, design: .rounded))
+                        .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .multilineTextAlignment(.leading)
+                }
+            } else {
+                TextEditor(text: $text)
+                    .font(.system(size: 28, weight: .medium, design: .rounded))
+                    .foregroundColor(.primary)
+                    .scrollContentBackground(.hidden)
+                    .overlay(alignment: .topLeading) {
+                        if text.isEmpty {
+                            Text(placeholder)
+                                .font(.system(size: 28, weight: .medium, design: .rounded))
+                                .foregroundColor(.secondary.opacity(0.3))
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                                .allowsHitTesting(false)
+                        }
+                    }
+            }
+        }
+        .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 32)
+                .fill(.ultraThinMaterial)
+                .shadow(color: Color.black.opacity(0.05), radius: 20, x: 0, y: 10)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 32)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+    }
+}
+
+struct GlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 14, weight: .medium))
+            .padding(8)
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
+            .opacity(configuration.isPressed ? 0.8 : 1.0)
+    }
+}
+
+struct CircleGlassButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .frame(width: 36, height: 36)
+            .background(Circle().fill(.ultraThinMaterial))
+            .overlay(Circle().stroke(Color.white.opacity(0.2), lineWidth: 1))
+            .scaleEffect(configuration.isPressed ? 0.9 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+
 struct ModelDashboardView: View {
     @ObservedObject var modelManager: ModelManager
     @Environment(\.dismiss) var dismiss
@@ -267,7 +381,7 @@ struct ModelDashboardView: View {
                     .keyboardShortcut(.defaultAction)
             }
             .padding()
-            .background(VisualEffectView(material: .titlebar, blendingMode: .withinWindow))
+            .background(.ultraThinMaterial)
             
             Divider()
             
@@ -305,8 +419,10 @@ struct ModelDashboardView: View {
                 .padding(.vertical, 8)
             }
             .listStyle(.inset)
+            .scrollContentBackground(.hidden)
         }
-        .frame(width: 480, height: 380)
+        .frame(width: 500, height: 400)
+        .background(.ultraThinMaterial)
     }
 }
 
@@ -327,3 +443,4 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.blendingMode = blendingMode
     }
 }
+
