@@ -346,18 +346,18 @@ struct TranslationCard<Actions: View, Center: View>: View {
     }
     
     private var fontSize: CGFloat {
-        let base: CGFloat = 22 // Reduced from 28 to 22 for better information density
-        let scaled = containerWidth / 50
-        return max(16, min(base, scaled))
+        let base: CGFloat = 20 // Further reduced for better fit
+        let scaled = containerWidth / 55
+        return max(15, min(base, scaled))
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            ZStack {
+            ZStack(alignment: .center) {
                 HStack {
                     Text(title)
-                        .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.primary.opacity(0.6))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary.opacity(0.5))
                     
                     Spacer()
                     
@@ -365,6 +365,7 @@ struct TranslationCard<Actions: View, Center: View>: View {
                 }
                 
                 centerView
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
             
             if isReadOnly {
@@ -374,6 +375,7 @@ struct TranslationCard<Actions: View, Center: View>: View {
                         .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .multilineTextAlignment(.leading)
+                        .padding(.top, 4) // Align with TextEditor baseline
                 }
             } else {
                 ZStack(alignment: .topLeading) {
@@ -381,8 +383,8 @@ struct TranslationCard<Actions: View, Center: View>: View {
                         Text(placeholder)
                             .font(.system(size: fontSize, weight: .medium, design: .rounded))
                             .foregroundColor(.secondary.opacity(0.3))
-                            .padding(.top, 8)
-                            .padding(.leading, 5)
+                            .padding(.top, 7) // Adjusted for macOS TextEditor
+                            .padding(.leading, 5) // Adjusted for macOS TextEditor
                             .allowsHitTesting(false)
                     }
                     
