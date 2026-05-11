@@ -70,6 +70,16 @@ struct MainView: View {
         return .blue
     }
     
+    private var formattedModelName: String {
+        guard let model = modelManager.models.first(where: { $0.id == selectedModelId }) else { return "No Model" }
+        // Format "translategemma-4b-it-4bit" to "TranslateGemma 4B"
+        let parts = model.name.lowercased().components(separatedBy: "-")
+        if let size = parts.first(where: { $0.hasSuffix("b") }) {
+            return "TranslateGemma \(size.uppercased())"
+        }
+        return model.name
+    }
+    
     var body: some View {
         GeometryReader { geometry in
             ZStack {
@@ -213,15 +223,6 @@ struct MainView: View {
                 }
             }
             .toolbar {
-                ToolbarItem(placement: .navigation) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "translate")
-                            .font(.system(size: 18, weight: .bold))
-                            .foregroundColor(.blue)
-                        Text("TranslateGemma")
-                            .font(.system(size: 16, weight: .black, design: .rounded))
-                    }
-                }
                 
                 ToolbarItem(placement: .primaryAction) {
                     Button(action: { showModelDashboard = true }) {
@@ -231,15 +232,21 @@ struct MainView: View {
                 }
                 
                 ToolbarItem(placement: .status) {
-                    if let model = modelManager.models.first(where: { $0.id == selectedModelId }) {
-                        HStack(spacing: 4) {
-                            Circle().fill(.green).frame(width: 6, height: 6)
-                            Text(model.name).font(.system(size: 11, weight: .medium, design: .rounded))
-                        }
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 4)
-                        .background(Capsule().fill(.ultraThinMaterial))
+                    HStack(spacing: 6) {
+                        Circle()
+                            .fill(LinearGradient(colors: [.green, .green.opacity(0.6)], startPoint: .top, endPoint: .bottom))
+                            .frame(width: 6, height: 6)
+                        Text(formattedModelName)
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
                     }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(
+                        ZStack {
+                            Capsule().fill(.ultraThinMaterial)
+                            Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5)
+                        }
+                    )
                 }
             }
         }
