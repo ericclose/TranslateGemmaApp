@@ -148,7 +148,10 @@ struct MainView: View {
         }
         .frame(minWidth: 900, minHeight: 600)
         .sheet(isPresented: $showModelDashboard) {
-            ModelDashboardView(modelManager: modelManager)
+            ModelDashboardView(
+                modelManager: modelManager,
+                selectedModelId: $selectedModelId
+            )
         }
         .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
             Button("OK") { errorMessage = nil }
@@ -444,6 +447,7 @@ struct CircleGlassButtonStyle: ButtonStyle {
 
 struct ModelDashboardView: View {
     @ObservedObject var modelManager: ModelManager
+    @Binding var selectedModelId: String
     @Environment(\.dismiss) var dismiss
     
     var body: some View {
@@ -476,7 +480,11 @@ struct ModelDashboardView: View {
             ScrollView {
                 VStack(spacing: 12) {
                     ForEach(modelManager.models) { model in
-                        ModelRowView(model: model, modelManager: modelManager)
+                        ModelRowView(
+                            model: model, 
+                            modelManager: modelManager,
+                            isSelected: model.id == selectedModelId
+                        )
                     }
                 }
                 .padding(20)
@@ -505,7 +513,7 @@ struct ModelDashboardView: View {
             .padding(.vertical, 16)
             .background(.ultraThinMaterial.opacity(0.5))
         }
-        .frame(width: 550, height: 500)
+        .frame(width: 550, height: 550)
         .background(VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow))
     }
 }
@@ -513,30 +521,36 @@ struct ModelDashboardView: View {
 struct ModelRowView: View {
     let model: ModelInfo
     @ObservedObject var modelManager: ModelManager
+    let isSelected: Bool
     
     var body: some View {
         HStack(spacing: 16) {
             // Model Icon
             ZStack {
                 Circle()
-                    .fill(model.isDownloaded ? Color.blue.opacity(0.1) : Color.primary.opacity(0.05))
+                    .fill(isSelected ? Color.blue.opacity(0.2) : (model.isDownloaded ? Color.blue.opacity(0.1) : Color.primary.opacity(0.05)))
                     .frame(width: 44, height: 44)
                 
-                Image(systemName: model.isDownloaded ? "brain.head.profile" : "cloud.circle")
+                Image(systemName: isSelected ? "brain.head.profile.fill" : (model.isDownloaded ? "brain.head.profile" : "cloud.circle"))
                     .font(.system(size: 20))
-                    .foregroundColor(model.isDownloaded ? .blue : .secondary)
+                    .foregroundColor(isSelected ? .blue : (model.isDownloaded ? .blue : .secondary))
             }
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(model.name)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundColor(isSelected ? .blue : .primary)
                 
                 HStack(spacing: 8) {
                     Text(model.size)
                         .font(.system(size: 12, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary)
                     
-                    if model.isDownloaded {
+                    if isSelected {
+                        Text("• Active")
+                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                            .foregroundColor(.blue)
+                    } else if model.isDownloaded {
                         Text("• Local")
                             .font(.system(size: 12, weight: .medium, design: .rounded))
                             .foregroundColor(.green.opacity(0.8))
@@ -547,13 +561,20 @@ struct ModelRowView: View {
             Spacer()
             
             if model.isDownloaded {
-                Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
-                    Image(systemName: "arrow.right.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(.primary.opacity(0.1))
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(.green)
+                    
+                    Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 14, weight: .semibold))
+                            .padding(8)
+                            .background(Circle().fill(.primary.opacity(0.05)))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show in Finder")
                 }
-                .buttonStyle(.plain)
-                .help("Show in Finder")
             } else if modelManager.isDownloading && model.downloadProgress > 0 {
                 VStack(alignment: .trailing, spacing: 4) {
                     ProgressView(value: model.downloadProgress)
@@ -569,12 +590,16 @@ struct ModelRowView: View {
                 Button(action: { 
                     Task { await modelManager.downloadModel(modelId: model.id) }
                 }) {
-                    Text("Download")
-                        .font(.system(size: 12, weight: .bold))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 6)
-                        .background(Capsule().fill(.primary))
-                        .foregroundColor(.white)
+                    HStack(spacing: 6) {
+                        Image(systemName: "icloud.and.arrow.down")
+                            .font(.system(size: 12, weight: .bold))
+                        Text("Download")
+                            .font(.system(size: 12, weight: .bold))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(.primary))
+                    .foregroundColor(.white)
                 }
                 .buttonStyle(.plain)
                 .opacity(modelManager.isDownloading ? 0.5 : 1.0)
@@ -584,12 +609,12 @@ struct ModelRowView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(NSApp.effectiveAppearance.name == .darkAqua ? 0.05 : 0.4))
-                .shadow(color: Color.black.opacity(0.02), radius: 5, x: 0, y: 2)
+                .fill(isSelected ? Color.blue.opacity(0.08) : Color.white.opacity(NSApp.effectiveAppearance.name == .darkAqua ? 0.05 : 0.4))
+                .shadow(color: isSelected ? Color.blue.opacity(0.1) : Color.black.opacity(0.02), radius: isSelected ? 10 : 5, x: 0, y: 2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                .stroke(isSelected ? Color.blue.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
         )
     }
 }
