@@ -1,6 +1,6 @@
 import Foundation
 import TranslateGemmaLibrary
-import Hub
+import HuggingFace
 
 @main
 struct Diagnostic {

@@ -1,5 +1,5 @@
 import Foundation
-import Hub
+import HuggingFace
 import os
 
 /// Centralized Resource Manager: Coordinates model paths, Metallib location, and logging configuration.
@@ -19,26 +19,25 @@ public enum AppConfiguration {
         return home.appendingPathComponent(".cache/huggingface/hub")
     }
     
-    /// Unified HubApi instance ensuring global cache path consistency.
-    /// Supports dynamic path switching (e.g., moving to an external drive).
-    public static private(set) var hub: HubApi = createHubApi()
+    /// Unified HubClient instance ensuring global cache path consistency.
+    public static private(set) var hubClient: HubClient = createHubClient()
     
-    private static func createHubApi() -> HubApi {
+    private static func createHubClient() -> HubClient {
         let path = currentHubPath
         try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
-        return HubApi(downloadBase: path)
+        return HubClient(cache: HubCache(cacheDirectory: path))
     }
     
-    /// Updates the unified Hub path and reinitializes HubApi.
+    /// Updates the unified Hub path and reinitializes HubClient.
     public static func updateHubPath(_ newPath: URL) {
         UserDefaults.standard.set(newPath.path, forKey: hubPathKey)
-        hub = HubApi(downloadBase: newPath)
+        hubClient = HubClient(cache: HubCache(cacheDirectory: newPath))
     }
     
     /// Resets to the default path (~/.cache/huggingface/hub).
     public static func resetHubPath() {
         UserDefaults.standard.removeObject(forKey: hubPathKey)
-        hub = createHubApi()
+        hubClient = createHubClient()
     }
     
     /// Gets the recommended path for MLX Metal shader libraries.
@@ -64,6 +63,11 @@ public enum AppConfiguration {
         }
         
         return nil
+    }
+    
+    /// Returns the modern Hub ID format (models--author--repo)
+    public static func getModernHubId(modelId: String) -> String {
+        return "models--" + modelId.replacingOccurrences(of: "/", with: "--")
     }
     
     /// Thoroughly checks if a model is fully downloaded, supporting both legacy and modern layouts.
@@ -113,8 +117,8 @@ public enum AppConfiguration {
             return legacyPath
         }
         
-        // Fallback to library default
-        return hub.localRepoLocation(Hub.Repo(id: modelId))
+        // Fallback to modern naming if nothing exists
+        return hubPath.appendingPathComponent(modernId)
     }
 }
 

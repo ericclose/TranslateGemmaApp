@@ -1,5 +1,5 @@
 import Foundation
-import Hub
+import HuggingFace
 import Combine
 import AppKit
 
@@ -18,7 +18,11 @@ public class ModelManager: ObservableObject {
     @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
     private let logger = AppLogger.service("ModelManager")
-    private var hub: HubApi { AppConfiguration.hub }
+    private var hubClient: HubClient { 
+        HubClient(
+            cache: HubCache(cacheDirectory: AppConfiguration.currentHubPath)
+        )
+    }
     
     public init() {
         Task {
@@ -43,8 +47,7 @@ public class ModelManager: ObservableObject {
     }
     
     public func getModelDirectory(modelId: String) -> URL {
-        let repo = Hub.Repo(id: modelId)
-        return hub.localRepoLocation(repo)
+        return AppConfiguration.getLocalModelPath(modelId: modelId)
     }
     
     public func checkIfDownloaded(modelId: String) -> Bool {
@@ -58,15 +61,13 @@ public class ModelManager: ObservableObject {
         
         downloadTask = Task {
             do {
-                let repo = Hub.Repo(id: modelId)
+                let repoId = Repo.ID(rawValue: modelId)!
                 
-                _ = try await hub.snapshot(
-                    from: repo,
-                    progressHandler: { progress in
-                        DispatchQueue.main.async {
-                            if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                                self.models[index].downloadProgress = progress.fractionCompleted
-                            }
+                _ = try await hubClient.downloadSnapshot(
+                    of: repoId,
+                    progressHandler: { p in
+                        if let index = self.models.firstIndex(where: { $0.id == modelId }) {
+                            self.models[index].downloadProgress = p.fractionCompleted
                         }
                     }
                 )
@@ -79,7 +80,7 @@ public class ModelManager: ObservableObject {
                 }
             } catch {
                 if !Task.isCancelled {
-                    print("Download failed: \(error)")
+                    logger.error("Download failed for \(modelId): \(error.localizedDescription)")
                 }
             }
             
@@ -104,8 +105,7 @@ public class ModelManager: ObservableObject {
     }
     
     public func revealInFinder(modelId: String) {
-        let repo = Hub.Repo(id: modelId)
-        let path = hub.localRepoLocation(repo)
+        let path = AppConfiguration.getLocalModelPath(modelId: modelId)
         
         if FileManager.default.fileExists(atPath: path.path) {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
