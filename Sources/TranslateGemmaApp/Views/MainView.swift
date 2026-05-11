@@ -49,12 +49,27 @@ struct MainView: View {
                         .frame(width: 200)
                     }
                     
+                    Button(action: { modelManager.selectCustomHubPath() }) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            Text("存储位置")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.secondary)
+                            Text(modelManager.currentHubPath)
+                                .font(.system(size: 10, design: .monospaced))
+                                .frame(width: 150, alignment: .trailing)
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help("点击更改全局 Hub 存储路径: \(modelManager.currentHubPath)")
+                    
                     Button(action: { showModelDashboard = true }) {
                         Image(systemName: "cpu")
                             .font(.title2)
                     }
                     .buttonStyle(.plain)
-                    .help("Model Dashboard")
+                    .help("模型管理")
                 }
                 .padding(.horizontal)
                 .padding(.top)
@@ -252,43 +267,6 @@ struct ModelDashboardView: View {
             }
             .padding()
             .background(VisualEffectView(material: .titlebar, blendingMode: .withinWindow))
-            
-            Divider()
-            
-            // Unified Hub Path Section
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("统一模型存储路径 (Hub Cache)")
-                        .font(.caption).bold()
-                        .foregroundColor(.secondary)
-                    Spacer()
-                    Button("恢复默认") {
-                        modelManager.resetToDefaultHubPath()
-                    }
-                    .buttonStyle(.plain)
-                    .font(.caption)
-                    .foregroundColor(.blue)
-                }
-                
-                HStack {
-                    Text(modelManager.currentHubPath)
-                        .font(.system(.caption, design: .monospaced))
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .padding(6)
-                        .background(Color.secondary.opacity(0.1))
-                        .cornerRadius(4)
-                        .help(modelManager.currentHubPath)
-                    
-                    Button("更改...") {
-                        modelManager.selectCustomHubPath()
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-            }
-            .padding()
-            .background(Color.secondary.opacity(0.05))
             
             Divider()
             
