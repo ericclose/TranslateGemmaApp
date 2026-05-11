@@ -100,17 +100,19 @@ struct MainView: View {
                             placeholder: "Translation will appear here",
                             textColor: .blue,
                             containerWidth: geometry.size.width,
+                            centerView: {
+                                Picker("", selection: $targetLanguage) {
+                                    ForEach(languages, id: \.self) { lang in
+                                        Text(lang).tag(lang)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .frame(width: 110)
+                                .labelsHidden()
+                                .background(Capsule().fill(.ultraThinMaterial))
+                            },
                             actions: {
                                 HStack(spacing: 12) {
-                                    Picker("", selection: $targetLanguage) {
-                                        ForEach(languages, id: \.self) { lang in
-                                            Text(lang).tag(lang)
-                                        }
-                                    }
-                                    .pickerStyle(.menu)
-                                    .frame(width: 100)
-                                    .labelsHidden()
-                                    
                                     Button(action: copyToClipboard) {
                                         Image(systemName: "doc.on.doc")
                                     }
@@ -285,7 +287,7 @@ struct HeaderView: View {
                 .buttonStyle(CircleGlassButtonStyle())
                 .help("Model Dashboard")
                 
-                HStack {
+                HStack(spacing: 12) {
                     Text("Model")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
@@ -302,7 +304,7 @@ struct HeaderView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .frame(width: 180)
+                    .frame(width: 240) // Increased width to prevent truncation
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
@@ -313,31 +315,56 @@ struct HeaderView: View {
     }
 }
 
-struct TranslationCard<Actions: View>: View {
+struct TranslationCard<Actions: View, Center: View>: View {
     let title: String
     @Binding var text: String
     let isReadOnly: Bool
     let placeholder: String
     var textColor: Color = .primary
     let containerWidth: CGFloat
+    @ViewBuilder let centerView: Center
     @ViewBuilder let actions: Actions
     
+    init(
+        title: String,
+        text: Binding<String>,
+        isReadOnly: Bool,
+        placeholder: String,
+        textColor: Color = .primary,
+        containerWidth: CGFloat,
+        @ViewBuilder centerView: () -> Center = { EmptyView() },
+        @ViewBuilder actions: () -> Actions
+    ) {
+        self.title = title
+        self._text = text
+        self.isReadOnly = isReadOnly
+        self.placeholder = placeholder
+        self.textColor = textColor
+        self.containerWidth = containerWidth
+        self.centerView = centerView()
+        self.actions = actions()
+    }
+    
     private var fontSize: CGFloat {
-        let base: CGFloat = 28
-        let scaled = containerWidth / 40
-        return max(18, min(base, scaled))
+        let base: CGFloat = 22 // Reduced from 28 to 22 for better information density
+        let scaled = containerWidth / 50
+        return max(16, min(base, scaled))
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold, design: .rounded))
-                    .foregroundColor(.primary.opacity(0.6))
+            ZStack {
+                HStack {
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(.primary.opacity(0.6))
+                    
+                    Spacer()
+                    
+                    actions
+                }
                 
-                Spacer()
-                
-                actions
+                centerView
             }
             
             if isReadOnly {
@@ -349,22 +376,21 @@ struct TranslationCard<Actions: View>: View {
                         .multilineTextAlignment(.leading)
                 }
             } else {
-                ScrollView {
+                ZStack(alignment: .topLeading) {
+                    if text.isEmpty {
+                        Text(placeholder)
+                            .font(.system(size: fontSize, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary.opacity(0.3))
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                    }
+                    
                     TextEditor(text: $text)
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(.primary)
                         .scrollContentBackground(.hidden)
                         .frame(minHeight: 200)
-                        .overlay(alignment: .topLeading) {
-                            if text.isEmpty {
-                                Text(placeholder)
-                                    .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                                    .foregroundColor(.secondary.opacity(0.3))
-                                    .padding(.top, 8)
-                                    .padding(.leading, 5)
-                                    .allowsHitTesting(false)
-                            }
-                        }
                 }
             }
         }
@@ -485,5 +511,6 @@ struct VisualEffectView: NSViewRepresentable {
         nsView.blendingMode = blendingMode
     }
 }
+
 
 
