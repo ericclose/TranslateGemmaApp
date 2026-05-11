@@ -9,12 +9,25 @@ public struct ModelInfo: Identifiable {
     public let size: String
     public var isDownloaded: Bool = false
     public var downloadProgress: Double = 0
+    public var completedSize: Int64 = 0
+    public var totalSize: Int64 = 0
+    
+    public init(id: String, name: String, size: String, isDownloaded: Bool = false, downloadProgress: Double = 0, completedSize: Int64 = 0, totalSize: Int64 = 0) {
+        self.id = id
+        self.name = name
+        self.size = size
+        self.isDownloaded = isDownloaded
+        self.downloadProgress = downloadProgress
+        self.completedSize = completedSize
+        self.totalSize = totalSize
+    }
 }
 
 @MainActor
 public class ModelManager: ObservableObject {
     @Published public var models: [ModelInfo] = []
     @Published public var isDownloading = false
+    @Published public var isConnecting = false
     @Published public var downloadingModelId: String? = nil
     @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
@@ -61,17 +74,36 @@ public class ModelManager: ObservableObject {
         self.downloadingModelId = modelId
         
         downloadTask = Task {
+            await MainActor.run { self.isConnecting = true }
             do {
-                let repoId = Repo.ID(rawValue: modelId)!
+                guard let repoId = Repo.ID(rawValue: modelId) else {
+                    self.logger.error("Invalid Model ID: \(modelId)")
+                    print("❌ ERROR: Invalid Model ID (must be namespace/name): \(modelId)")
+                    return
+                }
                 
                 let downloader: (Repo.ID, @escaping @Sendable (Progress) -> Void) async throws -> URL = downloadSnapshotProvider ?? { [hubClient] repo, progress in
                     try await hubClient.downloadSnapshot(of: repo, progressHandler: progress)
                 }
                 
                 _ = try await downloader(repoId) { p in
+                    if p.completedUnitCount > 0 {
+                        Task { @MainActor in self.isConnecting = false }
+                    }
+                    
+                    let fraction = p.fractionCompleted
+                    let completed = p.completedUnitCount
+                    let total = p.totalUnitCount
+                    
+                    if completed % (total / 20 + 1) == 0 || fraction >= 0.99 {
+                        self.logger.debug("Download Progress: \(Int(fraction * 100))% (\(completed)/\(total))")
+                    }
+                    
                     Task { @MainActor in
                         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                            self.models[index].downloadProgress = p.fractionCompleted
+                            self.models[index].downloadProgress = fraction
+                            self.models[index].completedSize = completed
+                            self.models[index].totalSize = total
                         }
                     }
                 }
@@ -84,16 +116,19 @@ public class ModelManager: ObservableObject {
                 }
             } catch {
                 if !Task.isCancelled {
-                    logger.error("Download failed for \(modelId): \(error.localizedDescription)")
+                    self.logger.error("Download failed for \(modelId): \(error)")
                 }
             }
             
             await MainActor.run {
                 self.isDownloading = false
+                self.isConnecting = false
                 self.downloadingModelId = nil
                 self.downloadTask = nil
             }
         }
+        
+        await downloadTask?.value
     }
     
     public func cancelDownload() {

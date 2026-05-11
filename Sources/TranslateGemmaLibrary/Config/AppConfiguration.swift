@@ -75,8 +75,7 @@ public enum AppConfiguration {
         let path = getLocalModelPath(modelId: modelId)
         
         let essentialFiles = [
-            "config.json",
-            "tokenizer.json"
+            "config.json"
         ]
         
         // 1. Check basic configuration files
@@ -87,12 +86,33 @@ public enum AppConfiguration {
             }
         }
         
-        // 2. Check weight files (safetensors or index)
-        let safetensors = path.appendingPathComponent("model.safetensors")
-        let index = path.appendingPathComponent("model.safetensors.index.json")
+        // 1.5 Check for at least one tokenizer related file
+        let tokenizerFiles = ["tokenizer.json", "vocab.json", "tokenizer.model"]
+        var hasTokenizer = false
+        for file in tokenizerFiles {
+            if FileManager.default.fileExists(atPath: path.appendingPathComponent(file).path) {
+                hasTokenizer = true
+                break
+            }
+        }
+        if !hasTokenizer { return false }
         
-        return FileManager.default.fileExists(atPath: safetensors.path) || 
-               FileManager.default.fileExists(atPath: index.path)
+        // 2. Check weight files (safetensors, bin, or index)
+        let weightFiles = [
+            "model.safetensors",
+            "model.safetensors.index.json",
+            "pytorch_model.bin",
+            "pytorch_model.bin.index.json",
+            "model.onnx"
+        ]
+        
+        for file in weightFiles {
+            if FileManager.default.fileExists(atPath: path.appendingPathComponent(file).path) {
+                return true
+            }
+        }
+        
+        return false
     }
     
     /// Gets the actual local path of a model, checking both legacy and modern layouts.

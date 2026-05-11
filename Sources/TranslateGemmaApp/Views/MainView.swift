@@ -590,13 +590,27 @@ struct ModelRowView: View {
             } else if modelManager.downloadingModelId == model.id {
                 VStack(alignment: .trailing, spacing: 6) {
                     HStack(spacing: 8) {
-                        ProgressView(value: model.downloadProgress).progressViewStyle(.linear).frame(width: 100).tint(.blue)
+                        ProgressView(value: model.downloadProgress).progressViewStyle(.linear).frame(width: 120).tint(.blue)
                         Button(action: { modelManager.cancelDownload() }) {
                             Image(systemName: "stop.circle.fill").font(.system(size: 18)).foregroundColor(.red.opacity(0.8))
                         }
                         .buttonStyle(.plain)
                     }
-                    Text("Downloading... \(Int(model.downloadProgress * 100))%").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundColor(.blue).padding(.trailing, 26)
+                    
+                    HStack(spacing: 4) {
+                        if modelManager.isConnecting && model.completedSize == 0 {
+                            Text("Connecting...").italic()
+                        } else {
+                            Text(String(format: "%.1f%%", model.downloadProgress * 100))
+                            Text("•")
+                            Text(ByteCountFormatter.string(fromByteCount: model.completedSize, countStyle: .file))
+                            Text("/")
+                            Text(ByteCountFormatter.string(fromByteCount: model.totalSize, countStyle: .file))
+                        }
+                    }
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(.blue.opacity(0.8))
+                    .padding(.trailing, 26)
                 }
             } else {
                 Button(action: { Task { await modelManager.downloadModel(modelId: model.id) } }) {
