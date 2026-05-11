@@ -303,13 +303,67 @@ struct HeaderView: View {
                     }
                     .pickerStyle(.menu)
                     .labelsHidden()
-                    .frame(width: 180)
+                    .frame(width: 260) // Increased width to avoid truncation
                 }
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .background(Capsule().fill(.ultraThinMaterial))
                 .overlay(Capsule().stroke(Color.white.opacity(0.1), lineWidth: 1))
             }
+        }
+    }
+}
+
+struct NativeTextEditor: NSViewRepresentable {
+    @Binding var text: String
+    var font: NSFont
+    var textColor: NSColor = .labelColor
+    
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSScrollView()
+        scrollView.hasVerticalScroller = true
+        scrollView.drawsBackground = false
+        
+        let textView = NSTextView()
+        textView.delegate = context.coordinator
+        textView.font = font
+        textView.textColor = textColor
+        textView.drawsBackground = false
+        textView.isRichText = false
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        
+        // Remove all implicit padding for perfect alignment
+        textView.textContainerInset = .zero
+        textView.textContainer?.lineFragmentPadding = 0
+        
+        scrollView.documentView = textView
+        return scrollView
+    }
+    
+    func updateNSView(_ nsView: NSScrollView, context: Context) {
+        guard let textView = nsView.documentView as? NSTextView else { return }
+        if textView.string != text {
+            textView.string = text
+        }
+        textView.font = font
+    }
+    
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+    
+    class Coordinator: NSObject, NSTextViewDelegate {
+        var parent: NativeTextEditor
+        
+        init(_ parent: NativeTextEditor) {
+            self.parent = parent
+        }
+        
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else { return }
+            self.parent.text = textView.string
         }
     }
 }
@@ -340,35 +394,30 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
             }
             .frame(height: 28)
             
-            if isReadOnly {
-                ScrollView {
-                    Text(text.isEmpty ? placeholder : text)
+            ZStack(alignment: .topLeading) {
+                if text.isEmpty {
+                    Text(placeholder)
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                        .foregroundColor(text.isEmpty ? .secondary.opacity(0.3) : textColor)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .multilineTextAlignment(.leading)
-                        .padding(.top, 4)
-                        .padding(.horizontal, 4)
+                        .foregroundColor(.secondary.opacity(0.3))
+                        .allowsHitTesting(false)
+                        .padding(.top, 1) // Tiny offset for visual balance
                 }
-            } else {
-                ZStack(alignment: .topLeading) {
-                    // Placeholder behind or on top with exact alignment
-                    if text.isEmpty {
-                        Text(placeholder)
+                
+                if isReadOnly {
+                    ScrollView {
+                        Text(text.isEmpty ? "" : text)
                             .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary.opacity(0.3))
-                            .padding(.top, 5) // Critical alignment fix for macOS TextEditor
-                            .padding(.leading, 4) // Critical alignment fix for macOS TextEditor
-                            .allowsHitTesting(false)
+                            .foregroundColor(textColor)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .multilineTextAlignment(.leading)
                     }
-                    
-                    TextEditor(text: $text)
-                        .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                        .foregroundColor(.primary)
-                        .scrollContentBackground(.hidden)
-                        .lineSpacing(0)
+                } else {
+                    NativeTextEditor(
+                        text: $text,
+                        font: .systemFont(ofSize: fontSize, weight: .medium)
+                    )
+                    .frame(minHeight: 200)
                 }
-                .frame(minHeight: 200)
             }
         }
         .padding(geometryPadding)
@@ -388,6 +437,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
         containerWidth > 1200 ? 28 : 16
     }
 }
+
 
 
 struct GlassButtonStyle: ButtonStyle {
