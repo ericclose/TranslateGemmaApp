@@ -25,32 +25,11 @@ struct MainView: View {
     var body: some View {
         GeometryReader { geometry in
             ZStack {
-                // Responsive Liquid Glass Background
-                ZStack {
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.white, Color.blue.opacity(0.1), Color.white]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                    
-                    Image("liquid_background", bundle: .module)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(width: geometry.size.width, height: geometry.size.height)
-                        .clipped()
-                        .opacity(0.6)
-                        .blur(radius: 20)
-                    
-                    Image("liquid_background", bundle: .module)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: geometry.size.width * 1.2)
-                        .opacity(0.8)
-                }
-                .ignoresSafeArea()
+                // Simplified Clean Background
+                Color(NSColor.windowBackgroundColor)
+                    .ignoresSafeArea()
                 
                 VisualEffectView(material: .fullScreenUI, blendingMode: .withinWindow)
-                    .opacity(0.3)
                     .ignoresSafeArea()
                 
                 VStack(spacing: 0) {
