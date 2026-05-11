@@ -8,9 +8,38 @@ public enum AppConfiguration {
     /// 统一的子系统名称
     public static let subsystem = "com.innovation.TranslateGemmaApp"
     
+    private static let hubPathKey = "com.innovation.TranslateGemmaApp.customHubPath"
+    
+    /// 获取当前生效的 Hub 根路径
+    public static var currentHubPath: URL {
+        if let savedPath = UserDefaults.standard.string(forKey: hubPathKey) {
+            return URL(fileURLWithPath: savedPath)
+        }
+        let home = FileManager.default.homeDirectoryForCurrentUser
+        return home.appendingPathComponent(".cache/huggingface/hub")
+    }
+    
     /// 统一的 HubApi 实例，确保缓存路径全局一致
-    /// 非沙盒模式下默认为 ~/.cache/huggingface/hub
-    public static let hub = HubApi()
+    /// 支持动态切换路径（如移动到外置硬盘）
+    public static private(set) var hub: HubApi = createHubApi()
+    
+    private static func createHubApi() -> HubApi {
+        let path = currentHubPath
+        try? FileManager.default.createDirectory(at: path, withIntermediateDirectories: true)
+        return HubApi(downloadBase: path)
+    }
+    
+    /// 更新统一的 Hub 路径并重新初始化 HubApi
+    public static func updateHubPath(_ newPath: URL) {
+        UserDefaults.standard.set(newPath.path, forKey: hubPathKey)
+        hub = HubApi(downloadBase: newPath)
+    }
+    
+    /// 重置为默认路径 (~/.cache/huggingface/hub)
+    public static func resetHubPath() {
+        UserDefaults.standard.removeObject(forKey: hubPathKey)
+        hub = createHubApi()
+    }
     
     /// 获取 MLX Metal 着色器库的推荐路径
     /// 遵循 MLX 核心的搜索约定

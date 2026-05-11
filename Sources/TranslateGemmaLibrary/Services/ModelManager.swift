@@ -15,8 +15,9 @@ public struct ModelInfo: Identifiable {
 public class ModelManager: ObservableObject {
     @Published public var models: [ModelInfo] = []
     @Published public var isDownloading = false
+    @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
-    private let hub = AppConfiguration.hub
+    private var hub: HubApi { AppConfiguration.hub }
     
     public init() {
         Task {
@@ -89,41 +90,29 @@ public class ModelManager: ObservableObject {
         }
     }
     
-    public func importLocalModel(modelId: String) {
+    public func selectCustomHubPath() {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
-        panel.message = "请选择包含模型文件（config.json等）的文件夹"
+        panel.message = "请选择 Hugging Face Hub 的统一存储目录（例如 ~/.cache/huggingface/hub 或外置盘路径）"
+        panel.prompt = "选择目录"
         
         if panel.runModal() == .OK, let url = panel.url {
-            // Verify if it looks like a model directory
-            let configPath = url.appendingPathComponent("config.json")
-            if FileManager.default.fileExists(atPath: configPath.path) {
-                // Here we would ideally save a security-scoped bookmark, 
-                // but for now, let's just symlink it or copy it into the sandbox
-                // if the user wants to avoid re-downloading.
-                
-                let repo = Hub.Repo(id: modelId)
-                let destination = hub.localRepoLocation(repo)
-                
-                try? FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-                
-                // Try to create a symbolic link (may fail depending on sandbox, 
-                // but usually works if user selected the source)
-                do {
-                    if FileManager.default.fileExists(atPath: destination.path) {
-                        try FileManager.default.removeItem(at: destination)
-                    }
-                    try FileManager.default.createSymbolicLink(at: destination, withDestinationURL: url)
-                    
-                    if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                        self.models[index].isDownloaded = true
-                    }
-                } catch {
-                    print("Failed to link local model: \(error)")
-                }
+            AppConfiguration.updateHubPath(url)
+            self.currentHubPath = url.path
+            Task {
+                await fetchCollectionModels()
             }
         }
     }
+    
+    public func resetToDefaultHubPath() {
+        AppConfiguration.resetHubPath()
+        self.currentHubPath = AppConfiguration.currentHubPath.path
+        Task {
+            await fetchCollectionModels()
+        }
+    }
+    
 }

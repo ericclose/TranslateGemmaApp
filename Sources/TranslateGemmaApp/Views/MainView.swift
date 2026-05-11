@@ -255,6 +255,43 @@ struct ModelDashboardView: View {
             
             Divider()
             
+            // Unified Hub Path Section
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("统一模型存储路径 (Hub Cache)")
+                        .font(.caption).bold()
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    Button("恢复默认") {
+                        modelManager.resetToDefaultHubPath()
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                }
+                
+                HStack {
+                    Text(modelManager.currentHubPath)
+                        .font(.system(.caption, design: .monospaced))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .padding(6)
+                        .background(Color.secondary.opacity(0.1))
+                        .cornerRadius(4)
+                        .help(modelManager.currentHubPath)
+                    
+                    Button("更改...") {
+                        modelManager.selectCustomHubPath()
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                }
+            }
+            .padding()
+            .background(Color.secondary.opacity(0.05))
+            
+            Divider()
+            
             List(modelManager.models) { model in
                 HStack {
                     VStack(alignment: .leading) {
@@ -291,12 +328,6 @@ struct ModelDashboardView: View {
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
                         
-                        Button(action: { modelManager.importLocalModel(modelId: model.id) }) {
-                            Image(systemName: "square.and.arrow.down.on.square")
-                                .help("Import local directory")
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.leading, 5)
                     }
                 }
                 .padding(.vertical, 5)
