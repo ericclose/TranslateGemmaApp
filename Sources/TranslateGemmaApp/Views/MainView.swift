@@ -575,31 +575,46 @@ struct ModelRowView: View {
                     .buttonStyle(.plain)
                     .help("Show in Finder")
                 }
-            } else if modelManager.isDownloading && model.downloadProgress > 0 {
-                VStack(alignment: .trailing, spacing: 4) {
-                    ProgressView(value: model.downloadProgress)
-                        .progressViewStyle(.linear)
-                        .frame(width: 100)
-                        .tint(.blue)
+            } else if modelManager.isDownloading && model.downloadProgress > 0 && model.downloadProgress < 1.0 {
+                VStack(alignment: .trailing, spacing: 6) {
+                    HStack(spacing: 8) {
+                        ProgressView(value: model.downloadProgress)
+                            .progressViewStyle(.linear)
+                            .frame(width: 100)
+                            .tint(.blue)
+                        
+                        Button(action: { modelManager.cancelDownload() }) {
+                            Image(systemName: "stop.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(.red.opacity(0.8))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Cancel Download")
+                    }
                     
-                    Text("\(Int(model.downloadProgress * 100))%")
+                    Text("Downloading... \(Int(model.downloadProgress * 100))%")
                         .font(.system(size: 10, weight: .bold, design: .rounded))
                         .foregroundColor(.blue)
+                        .padding(.trailing, 26) // Align with progress bar
                 }
             } else {
                 Button(action: { 
                     Task { await modelManager.downloadModel(modelId: model.id) }
                 }) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 8) {
                         Image(systemName: "icloud.and.arrow.down")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                         Text("Download")
-                            .font(.system(size: 12, weight: .bold))
+                            .font(.system(size: 13, weight: .bold))
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(.primary))
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(LinearGradient(colors: [.blue, .blue.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    )
                     .foregroundColor(.white)
+                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
                 }
                 .buttonStyle(.plain)
                 .opacity(modelManager.isDownloading ? 0.5 : 1.0)
