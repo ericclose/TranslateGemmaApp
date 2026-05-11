@@ -20,8 +20,10 @@ public class TranslationService: ObservableObject {
     public init() {}
     
     public func loadModel(modelId: String) async throws {
-        // Use the modern API to set memory limits
-        MLX.Memory.cacheLimit = 8 * 1024 * 1024 * 1024 // 8GB
+        // Set cache limit to 60% of physical memory (e.g., ~19GB on a 32GB machine)
+        // This allows high-end machines to use their full potential while keeping low-end machines safe.
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.6)
         
         logToFile("--- Loading Model: \(modelId) ---")
         
@@ -90,14 +92,23 @@ public class TranslationService: ObservableObject {
         logToFile("Using language codes: \(sCode) -> \(tCode)")
         
         // Gemma 3 TranslateGemma requires a specific structured content format
+        // Some versions of MLXLLM prefer a single dictionary for content if it's text-only
         let content: [String: Any] = [
             "type": "text",
             "text": text,
-            "source_lang_code": sCode as Any,
-            "target_lang_code": tCode as Any
+            "source_lang_code": sCode,
+            "target_lang_code": tCode
         ]
         
         let messages: [[String: Any]] = [
+            [
+                "role": "user",
+                "content": text // Fallback to plain text if structured content fails
+            ]
+        ]
+        
+        // Let's try to prepare with structured content first
+        let structuredMessages: [[String: Any]] = [
             [
                 "role": "user",
                 "content": [content]
@@ -106,10 +117,10 @@ public class TranslationService: ObservableObject {
         
         let input: LMInput
         do {
-            input = try await container.prepare(input: UserInput(messages: messages))
+            input = try await container.prepare(input: UserInput(messages: structuredMessages))
         } catch {
-            logger.error("Failed to prepare input: \(error.localizedDescription)")
-            throw error
+            logger.warning("Failed to prepare structured input, falling back to plain text: \(error.localizedDescription)")
+            input = try await container.prepare(input: UserInput(messages: messages))
         }
         
         await MainActor.run { self.isTranslating = true }
@@ -128,14 +139,22 @@ public class TranslationService: ObservableObject {
             logToFile("Iterating stream...")
             for try await generation in stream {
                 if case .chunk(let text) = generation {
-                    // Gemma 3 manual EOS check
-                    if text.contains("<end_of_turn>") || text.contains("<eos>") {
-                        logToFile("Detected EOS/Stop sequence. Breaking.")
+                    // Gemma 3 manual EOS check - more robust detection
+                    let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
+                    if stopSequences.contains(where: { text.contains($0) }) {
+                        logToFile("Detected EOS/Stop sequence in chunk. Breaking.")
                         break
                     }
                     
-                    // Directly append to local variable
                     outputText += text
+                    
+                    // Safety break for extremely long translations
+                    if outputText.count > text.count * 10 {
+                         if outputText.count > 10000 {
+                             logToFile("Safety limit reached. Breaking.")
+                             break
+                         }
+                    }
                 }
             }
             
@@ -179,19 +198,22 @@ public class TranslationService: ObservableObject {
     }
     
     private func logToFile(_ message: String) {
-        // Use NSLog so it shows up in Console.app and terminal even if files fail
+        // Use NSLog for system-level logging
         NSLog("TranslateGemma: %@", message)
         
-        // Try file backup to /tmp but don't crash if it fails
-        let logPath = URL(fileURLWithPath: "/tmp/TranslateGemma_Debug.log")
+        // Use a safe sandbox-friendly path for the debug log
+        let fileManager = FileManager.default
+        let cachesURL = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first ?? fileManager.temporaryDirectory
+        let logPath = cachesURL.appendingPathComponent("TranslateGemma_Debug.log")
+        
         let timestamp = Date().description
         let fullMessage = "[\(timestamp)] \(message)\n"
         
         if let data = fullMessage.data(using: .utf8) {
             if let fileHandle = try? FileHandle(forWritingTo: logPath) {
+                defer { try? fileHandle.close() }
                 fileHandle.seekToEndOfFile()
                 fileHandle.write(data)
-                fileHandle.closeFile()
             } else {
                 try? data.write(to: logPath, options: .atomic)
             }
