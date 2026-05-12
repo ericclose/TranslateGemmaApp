@@ -43,31 +43,6 @@ public enum AppConfiguration {
         hubClient = createHubClient()
     }
     
-    /// Gets the recommended path for MLX Metal shader libraries.
-    /// Follows MLX core search conventions.
-    public static func getMetallibURL() -> URL? {
-        // 1. Prefer mlx-swift_Cmlx.bundle (SPM standard path)
-        if let bundleURL = Bundle.main.url(forResource: "mlx-swift_Cmlx", withExtension: "bundle"),
-           let bundle = Bundle(url: bundleURL),
-           let url = bundle.url(forResource: "default", withExtension: "metallib") {
-            return url
-        }
-        
-        // 2. Look in the Resources root directory
-        if let url = Bundle.main.url(forResource: "default", withExtension: "metallib") {
-            return url
-        }
-        
-        // 3. Iterate through all loaded bundles as a fallback
-        for bundle in Bundle.allBundles {
-            if let url = bundle.url(forResource: "default", withExtension: "metallib") {
-                return url
-            }
-        }
-        
-        return nil
-    }
-    
     /// Returns the modern Hub ID format (models--author--repo)
     public static func getModernHubId(modelId: String) -> String {
         return "models--" + modelId.replacingOccurrences(of: "/", with: "--")
