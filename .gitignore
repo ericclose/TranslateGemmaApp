@@ -24,7 +24,6 @@ xcuserdata/
 *.xscheduleresults
 
 # Models and Large Files (TranslateGemmaApp specific)
-**/Models/
 *.bin
 *.gguf
 *.mlmodel

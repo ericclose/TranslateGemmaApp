@@ -23,9 +23,9 @@ public class ModelManager {
     
     public func fetchCollectionModels() async {
         let modelSpecs = [
-            ("mlx-community/translategemma-4b-it-4bit", "2.6 GB"),
-            ("mlx-community/translategemma-12b-it-4bit", "7.5 GB"),
-            ("mlx-community/translategemma-27b-it-4bit", "16.2 GB")
+            ("mlx-community/translategemma-4b-it-4bit", "2.2 GB"),
+            ("mlx-community/translategemma-12b-it-4bit", "6.7 GB"),
+            ("mlx-community/translategemma-27b-it-4bit", "15.2 GB")
         ]
         
         var fetched: [ModelInfo] = []
