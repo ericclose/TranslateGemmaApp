@@ -174,6 +174,17 @@ public struct TranslationView: View {
                     }
                     .padding(.bottom, 50)
                 }
+                
+                // System Status Bar in bottom-left
+                VStack {
+                    Spacer()
+                    HStack {
+                        SystemStatusBar()
+                            .padding(.leading, 30)
+                            .padding(.bottom, 30)
+                        Spacer()
+                    }
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
