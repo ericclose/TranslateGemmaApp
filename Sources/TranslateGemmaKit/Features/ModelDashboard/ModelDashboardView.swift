@@ -58,6 +58,51 @@ public struct ModelDashboardView: View {
                 }
                 .padding(32)
                 
+                // Requirement Prompt
+                if !modelManager.models.contains(where: { $0.isDownloaded }) {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "exclamationmark.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.orange)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("No Models Downloaded")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                Text("Download at least one model to start translating.")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.orange.opacity(0.1)))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.orange.opacity(0.2), lineWidth: 1))
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 8)
+                    }
+                } else if selectedModelId.isEmpty {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 12) {
+                            Image(systemName: "info.circle.fill")
+                                .font(.system(size: 20))
+                                .foregroundColor(.blue)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Select a Model")
+                                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                                Text("Choose an active model from the list below to begin.")
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .foregroundColor(.secondary)
+                            }
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.blue.opacity(0.1)))
+                        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(.blue.opacity(0.2), lineWidth: 1))
+                        .padding(.horizontal, 32)
+                        .padding(.bottom, 8)
+                    }
+                }
+                
                 ScrollView {
                     VStack(spacing: 12) {
                         ForEach(modelManager.models) { model in

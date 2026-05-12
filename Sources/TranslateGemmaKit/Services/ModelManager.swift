@@ -28,13 +28,16 @@ public class ModelManager {
             ("mlx-community/translategemma-27b-it-4bit", "15.2 GB")
         ]
         
+        // Fast UI refresh: clear existing status or show immediate check
         var fetched: [ModelInfo] = []
         for (id, size) in modelSpecs {
             let isDownloaded = checkIfDownloaded(modelId: id)
             fetched.append(ModelInfo(id: id, name: id.components(separatedBy: "/").last ?? id, size: size, isDownloaded: isDownloaded))
         }
         
-        self.models = fetched
+        withAnimation(.easeInOut(duration: 0.2)) {
+            self.models = fetched
+        }
     }
     
     public func getModelDirectory(modelId: String) -> URL {
