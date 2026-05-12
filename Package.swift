@@ -22,10 +22,8 @@ let package = Package(
             name: "TranslateGemmaKit",
             dependencies: [
                 .product(name: "MLX", package: "mlx-swift"),
-                .product(name: "MLXRandom", package: "mlx-swift"),
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "MLXHuggingFace", package: "mlx-swift-lm"),
-                .product(name: "Transformers", package: "swift-transformers"),
                 .product(name: "Tokenizers", package: "swift-transformers"),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
             ]
@@ -33,8 +31,7 @@ let package = Package(
         .executableTarget(
             name: "TranslateGemmaApp",
             dependencies: [
-                "TranslateGemmaKit",
-                .product(name: "MLX", package: "mlx-swift"),
+                "TranslateGemmaKit"
             ],
             exclude: [
                 "Resources/Info.plist",
