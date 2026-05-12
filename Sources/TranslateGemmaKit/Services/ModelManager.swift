@@ -2,6 +2,7 @@ import Foundation
 import HuggingFace
 import Observation
 import AppKit
+import SwiftUI
 
 @Observable
 @MainActor

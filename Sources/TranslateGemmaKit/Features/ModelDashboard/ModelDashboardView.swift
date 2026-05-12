@@ -199,6 +199,26 @@ public struct ModelDashboardView: View {
             }
         }
         .frame(width: 680, height: 640)
+        .onAppear { validateSelection() }
+        .onChange(of: modelManager.models) { validateSelection() }
+    }
+    
+    private func validateSelection() {
+        let downloadedModels = modelManager.models.filter { $0.isDownloaded }
+        
+        // 1. If the currently selected model is no longer downloaded, clear it
+        if !selectedModelId.isEmpty {
+            if !downloadedModels.contains(where: { $0.id == selectedModelId }) {
+                selectedModelId = ""
+            }
+        }
+        
+        // 2. If exactly one model is downloaded and nothing is currently selected, auto-select it
+        if downloadedModels.count == 1 && selectedModelId.isEmpty {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedModelId = downloadedModels[0].id
+            }
+        }
     }
 }
 
@@ -211,7 +231,9 @@ struct ModelRowView: View {
     let onCancelDownload: () -> Void
     @State private var isHovered = false
     
-    var isSelected: Bool { model.id == selectedModelId }
+    var isSelected: Bool { 
+        model.id == selectedModelId && model.isDownloaded 
+    }
     
     private func selectModel() {
         if model.isDownloaded {
