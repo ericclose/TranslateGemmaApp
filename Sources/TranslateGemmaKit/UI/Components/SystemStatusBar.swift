@@ -11,7 +11,7 @@ public struct SystemStatusBar: View {
     }
     
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) { // Reduced spacing
             StatusRow(
                 icon: "cpu",
                 label: "CPU",
@@ -21,7 +21,7 @@ public struct SystemStatusBar: View {
             
             StatusRow(
                 icon: "memorychip",
-                label: "Mem",
+                label: "MEM",
                 value: systemMonitor.ramTotal > 0 ? systemMonitor.ramUsed / systemMonitor.ramTotal : 0,
                 color: .purple,
                 subDetail: "\(formatBytes(systemMonitor.ramUsed)) / \(formatBytes(systemMonitor.ramTotal))"
@@ -34,18 +34,18 @@ public struct SystemStatusBar: View {
                 color: .teal
             )
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(width: 220) // Slightly wider for centered text
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(width: 230) // Shrunk from 260
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial.opacity(0.95)) // Reduced transparency
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(.ultraThinMaterial.opacity(0.95))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
                         .stroke(.white.opacity(0.2), lineWidth: 0.5)
                 )
         )
-        .shadow(color: .black.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -57,42 +57,46 @@ struct StatusRow: View {
     var subDetail: String? = nil
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(alignment: .center, spacing: 6) {
-                Image(systemName: icon)
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(color.opacity(0.9))
-                    .frame(width: 12)
-                
-                Text(label)
-                    .font(.system(size: 10, weight: .bold, design: .rounded))
-                    .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 4) { // Reduced spacing
+            HStack(alignment: .center, spacing: 0) {
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(.system(size: 8, weight: .bold)) // Shrunk icon
+                        .foregroundColor(color.opacity(0.9))
+                        .frame(width: 10)
+                    
+                    Text(label)
+                        .font(.system(size: 9, weight: .bold, design: .rounded)) // Shrunk font
+                        .foregroundColor(.secondary)
+                }
+                .frame(width: 40, alignment: .leading)
                 
                 Spacer()
                 
                 if let subDetail = subDetail {
                     Text(subDetail)
-                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .font(.system(size: 8, weight: .medium, design: .monospaced)) // Shrunk font
                         .foregroundColor(.secondary.opacity(0.8))
-                    
-                    Spacer() // Push to middle
+                        .fixedSize(horizontal: true, vertical: false)
                 }
                 
+                Spacer()
+                
                 Text(String(format: "%.0f%%", value * 100))
-                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .font(.system(size: 9, weight: .bold, design: .monospaced)) // Shrunk font
                     .foregroundColor(.primary)
+                    .frame(width: 30, alignment: .trailing)
             }
             
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
-                    // Much clearer background for the bar
                     Capsule()
                         .fill(.white.opacity(0.15))
                         .overlay(
                             Capsule()
                                 .stroke(.white.opacity(0.1), lineWidth: 0.5)
                         )
-                        .frame(height: 3.5)
+                        .frame(height: 2.5) // Shrunk bar height
                     
                     Capsule()
                         .fill(
@@ -102,11 +106,11 @@ struct StatusRow: View {
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(value))), height: 3.5)
-                        .shadow(color: color.opacity(0.4), radius: 2, x: 0, y: 0)
+                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(value))), height: 2.5)
+                        .shadow(color: color.opacity(0.3), radius: 2, x: 0, y: 0)
                 }
             }
-            .frame(height: 3.5)
+            .frame(height: 2.5)
         }
     }
 }

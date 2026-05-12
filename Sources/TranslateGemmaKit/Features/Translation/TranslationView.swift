@@ -66,21 +66,72 @@ public struct TranslationView: View {
         }
     }
     
+    @State private var showLanguagePicker = false
+    
     @ViewBuilder
     private var targetHeader: some View {
-        Menu {
-            ForEach(languages, id: \.self) { lang in
-                Button(lang) { targetLanguage = lang }
-            }
-        } label: {
-            HStack {
+        Button(action: { showLanguagePicker.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: "character.bubble.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(currentAccentColor)
+                
                 Text(targetLanguage)
-                Image(systemName: "chevron.down").font(.system(size: 10))
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
+                    .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 6)
-            .background(Capsule().fill(.ultraThinMaterial))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(
+                ZStack {
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                    Capsule()
+                        .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
+                }
+            )
+            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         }
-        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .popover(isPresented: $showLanguagePicker, arrowEdge: .bottom) {
+            VStack(alignment: .center, spacing: 2) {
+                ForEach(languages, id: \.self) { lang in
+                    Button(action: {
+                        targetLanguage = lang
+                        showLanguagePicker = false
+                    }) {
+                        ZStack {
+                            Text(lang)
+                                .font(.system(size: 12, weight: .medium, design: .rounded))
+                                .frame(maxWidth: .infinity, alignment: .center)
+                            
+                            HStack {
+                                Spacer()
+                                if targetLanguage == lang {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 10, weight: .bold))
+                                        .foregroundColor(currentAccentColor)
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .contentShape(Rectangle())
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(targetLanguage == lang ? currentAccentColor.opacity(0.1) : .clear)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(6)
+            .frame(width: 140)
+            .background(VisualEffectView(material: .popover, blendingMode: .withinWindow))
+        }
     }
     
     @ViewBuilder
@@ -165,7 +216,7 @@ public struct TranslationView: View {
                         )
                         .onHover { isHoveringTarget = $0 }
                     }
-                    .padding(.horizontal, 40).padding(.bottom, 20)
+                    .padding(.horizontal, 40).padding(.bottom, 30) // Adjusted padding
                     
                     Spacer()
                     
@@ -181,7 +232,7 @@ public struct TranslationView: View {
                     HStack {
                         SystemStatusBar()
                             .padding(.leading, 40)
-                            .padding(.bottom, 40)
+                            .padding(.bottom, 25) // Slightly adjusted for optical balance
                         Spacer()
                     }
                 }
