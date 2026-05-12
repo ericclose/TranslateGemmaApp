@@ -202,10 +202,21 @@ public struct TranslationView: View {
             Task {
                 await modelManager.fetchCollectionModels()
                 let downloaded = modelManager.models.filter { $0.isDownloaded }
+                
                 if downloaded.isEmpty {
+                    // Scenario: No models locally, show dashboard and clear selection
+                    selectedModelId = ""
                     showModelDashboard = true
-                } else if selectedModelId.isEmpty || !downloaded.contains(where: { $0.id == selectedModelId }) {
-                    selectedModelId = downloaded.first?.id ?? ""
+                } else if downloaded.count == 1 {
+                    // Scenario: Exactly one model available, auto-activate it
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        selectedModelId = downloaded[0].id
+                    }
+                } else {
+                    // Scenario: Multiple models exist, validate that current selection is still available
+                    if !selectedModelId.isEmpty && !downloaded.contains(where: { $0.id == selectedModelId }) {
+                        selectedModelId = ""
+                    }
                 }
             }
         }
