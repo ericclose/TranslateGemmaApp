@@ -1,10 +1,38 @@
 import SwiftUI
 
 public struct CustomConfirmationDialog: View {
+    public enum Style {
+        case info, warning, destructive
+        
+        var color: Color {
+            switch self {
+            case .info: return .blue
+            case .warning: return .orange
+            case .destructive: return .red
+            }
+        }
+        
+        var icon: String {
+            switch self {
+            case .info: return "questionmark.circle.fill"
+            case .warning: return "exclamationmark.circle.fill"
+            case .destructive: return "exclamationmark.triangle.fill"
+            }
+        }
+        
+        var gradient: LinearGradient {
+            switch self {
+            case .info: return LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing)
+            case .warning: return LinearGradient(colors: [.orange, .yellow], startPoint: .topLeading, endPoint: .bottomTrailing)
+            case .destructive: return LinearGradient(colors: [.red, .orange], startPoint: .topLeading, endPoint: .bottomTrailing)
+            }
+        }
+    }
+
     let title: String
     let message: String
     let confirmTitle: String
-    let isDestructive: Bool
+    let style: Style
     let onConfirm: () -> Void
     let onCancel: () -> Void
     
@@ -14,14 +42,14 @@ public struct CustomConfirmationDialog: View {
         title: String,
         message: String,
         confirmTitle: String,
-        isDestructive: Bool = false,
+        style: Style = .info,
         onConfirm: @escaping () -> Void,
         onCancel: @escaping () -> Void
     ) {
         self.title = title
         self.message = message
         self.confirmTitle = confirmTitle
-        self.isDestructive = isDestructive
+        self.style = style
         self.onConfirm = onConfirm
         self.onCancel = onCancel
     }
@@ -37,11 +65,11 @@ public struct CustomConfirmationDialog: View {
                 // Header Icon
                 ZStack {
                     Circle()
-                        .fill(isDestructive ? Color.red.opacity(0.1) : Color.blue.opacity(0.1))
+                        .fill(style.color.opacity(0.1))
                         .frame(width: 56, height: 56)
-                    Image(systemName: isDestructive ? "exclamationmark.triangle.fill" : "questionmark.circle.fill")
+                    Image(systemName: style.icon)
                         .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(isDestructive ? .red : .blue)
+                        .foregroundColor(style.color)
                 }
                 .padding(.top, 8)
                 
@@ -80,10 +108,8 @@ public struct CustomConfirmationDialog: View {
                             .padding(.vertical, 12)
                             .background(
                                 Capsule()
-                                    .fill(isDestructive ? 
-                                        LinearGradient(colors: [.red, .orange], startPoint: .topLeading, endPoint: .bottomTrailing) :
-                                        LinearGradient(colors: [.blue, .indigo], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .shadow(color: (isDestructive ? Color.red : Color.blue).opacity(0.3), radius: 8, x: 0, y: 4)
+                                    .fill(style.gradient)
+                                    .shadow(color: style.color.opacity(0.3), radius: 8, x: 0, y: 4)
                             )
                     }
                     .buttonStyle(.plain)

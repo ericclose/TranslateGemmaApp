@@ -129,7 +129,7 @@ public struct ModelDashboardView: View {
                             title: "Delete Model?",
                             message: "Are you sure you want to delete \(model.name)? This action cannot be undone.",
                             confirmTitle: "Delete",
-                            isDestructive: true,
+                            style: .destructive,
                             onConfirm: {
                                 withAnimation { activeDialog = nil }
                                 modelManager.deleteModel(modelId: model.id)
@@ -142,7 +142,7 @@ public struct ModelDashboardView: View {
                             title: "Stop Download?",
                             message: "Are you sure you want to cancel the download for \(model.name)?",
                             confirmTitle: "Stop",
-                            isDestructive: true,
+                            style: .warning,
                             onConfirm: {
                                 withAnimation { activeDialog = nil }
                                 modelManager.cancelDownload()
