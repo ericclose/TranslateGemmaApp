@@ -114,9 +114,32 @@ struct ModelRowView: View {
     @Binding var selectedModelId: String
     @Environment(\.colorScheme) var colorScheme
     @State private var showDeleteConfirmation = false
+    @State private var showCancelConfirmation = false
     @State private var isHovered = false
     
     var isSelected: Bool { model.id == selectedModelId }
+    
+    private func selectModel() {
+        if model.isDownloaded {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                selectedModelId = model.id
+            }
+        }
+    }
+    
+    private var rowBackground: Color {
+        if isSelected {
+            return Color.blue.opacity(colorScheme == .dark ? 0.1 : 0.05)
+        } else if isHovered {
+            return Color.primary.opacity(0.03)
+        } else {
+            return Color.clear
+        }
+    }
+    
+    private var rowStroke: Color {
+        isSelected ? Color.blue.opacity(0.3) : Color.white.opacity(0.1)
+    }
     
     var body: some View {
         HStack(spacing: 16) {
@@ -152,13 +175,6 @@ struct ModelRowView: View {
             
             if model.isDownloaded {
                 HStack(spacing: 10) {
-                    if isSelected {
-                        Image(systemName: "checkmark.seal.fill")
-                            .symbolRenderingMode(.hierarchical)
-                            .font(.system(size: 20))
-                            .foregroundColor(.blue)
-                    }
-                    
                     Button(action: { modelManager.revealInFinder(modelId: model.id) }) {
                         Image(systemName: "folder")
                             .font(.system(size: 12, weight: .bold))
@@ -185,7 +201,7 @@ struct ModelRowView: View {
                             .progressViewStyle(.linear)
                             .frame(width: 120)
                             .tint(.blue)
-                        Button(action: { modelManager.cancelDownload() }) {
+                        Button(action: { showCancelConfirmation = true }) {
                             Image(systemName: "stop.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.red.opacity(0.8))
@@ -228,21 +244,18 @@ struct ModelRowView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(isSelected ? Color.blue.opacity(colorScheme == .dark ? 0.1 : 0.05) : (isHovered ? Color.primary.opacity(0.03) : Color.clear))
+                .fill(rowBackground)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(isSelected ? Color.blue.opacity(0.3) : Color.white.opacity(0.1), lineWidth: 1)
+                .strokeBorder(rowStroke, lineWidth: 1)
         )
+        .scaleEffect(isSelected ? 1.015 : 1.0)
+        .shadow(color: isSelected ? Color.blue.opacity(0.12) : Color.clear, radius: 12, x: 0, y: 6)
+        .animation(.spring(response: 0.4, dampingFraction: 0.75), value: isSelected)
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
-        .onTapGesture {
-            if model.isDownloaded {
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    selectedModelId = model.id
-                }
-            }
-        }
+        .onTapGesture { selectModel() }
         .alert("Confirm Deletion", isPresented: $showDeleteConfirmation) {
             Button("Delete", role: .destructive) {
                 modelManager.deleteModel(modelId: model.id)
@@ -251,6 +264,14 @@ struct ModelRowView: View {
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("Are you sure you want to delete \(model.name)? This action cannot be undone.")
+        }
+        .alert("Stop Download", isPresented: $showCancelConfirmation) {
+            Button("Stop", role: .destructive) {
+                modelManager.cancelDownload()
+            }
+            Button("Continue", role: .cancel) {}
+        } message: {
+            Text("Are you sure you want to cancel the download for \(model.name)?")
         }
     }
 }

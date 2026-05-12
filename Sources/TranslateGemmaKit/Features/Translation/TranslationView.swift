@@ -38,7 +38,90 @@ public struct TranslationView: View {
         if let size = parts.first(where: { $0.hasSuffix("b") }) {
             return "TranslateGemma \(size.uppercased())"
         }
-        return model.name
+    return model.name
+    }
+    
+    // MARK: - Subviews
+    
+    @ViewBuilder
+    private var sourceHeader: some View {
+        Label(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect", systemImage: "text.justify.left")
+            .font(.system(size: 13, weight: .bold, design: .rounded))
+            .foregroundColor(.secondary)
+    }
+    
+    @ViewBuilder
+    private var sourceActions: some View {
+        HStack(spacing: 8) {
+            Button(action: importFile) { Image(systemName: "doc.badge.plus") }
+                .buttonStyle(OrnamentButtonStyle())
+                .help("Import File (⌘I)")
+            
+            if !inputText.isEmpty {
+                Button(action: { withAnimation { inputText = ""; importedFileURL = nil } }) {
+                    Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(OrnamentButtonStyle())
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var targetHeader: some View {
+        Menu {
+            ForEach(languages, id: \.self) { lang in
+                Button(lang) { targetLanguage = lang }
+            }
+        } label: {
+            HStack {
+                Text(targetLanguage)
+                Image(systemName: "chevron.down").font(.system(size: 10))
+            }
+            .padding(.horizontal, 12).padding(.vertical, 6)
+            .background(Capsule().fill(.ultraThinMaterial))
+        }
+        .menuStyle(.button)
+    }
+    
+    @ViewBuilder
+    private var targetActions: some View {
+        HStack(spacing: 8) {
+            Button(action: copyToClipboard) { Image(systemName: "doc.on.doc") }
+                .buttonStyle(OrnamentButtonStyle())
+                .disabled(outputText.isEmpty)
+                .help("Copy (⌘C)")
+            
+            Button(action: swapLanguages) { Image(systemName: "arrow.left.and.right") }
+                .buttonStyle(OrnamentButtonStyle())
+            
+            Button(action: exportFile) { Image(systemName: "square.and.arrow.up") }
+                .buttonStyle(OrnamentButtonStyle())
+                .disabled(outputText.isEmpty)
+                .help("Export (⌘E)")
+        }
+    }
+    
+    @ViewBuilder
+    private var translateButton: some View {
+        Button(action: translateAction) {
+            HStack(spacing: 12) {
+                if translationService.isTranslating {
+                    ProgressView().controlSize(.small).tint(.white)
+                } else {
+                    Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
+                }
+                Text("Translate").font(.system(size: 18, weight: .bold, design: .rounded))
+            }
+            .frame(width: 220, height: 56)
+            .background(
+                Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : [currentAccentColor, currentAccentColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    .shadow(color: currentAccentColor.opacity(inputText.isEmpty ? 0 : 0.4), radius: 15, x: 0, y: 8)
+            )
+            .foregroundColor(inputText.isEmpty ? .secondary : .white)
+        }
+        .buttonStyle(.plain)
+        .disabled(inputText.isEmpty || translationService.isTranslating)
+        .keyboardShortcut(.return, modifiers: .command)
     }
     
     public var body: some View {
@@ -52,30 +135,13 @@ public struct TranslationView: View {
                     
                     AdaptiveLayout(width: geometry.size.width) {
                         TranslationCard(
-                            title: {
-                                Label(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect", systemImage: "text.justify.left")
-                                    .font(.system(size: 13, weight: .bold, design: .rounded))
-                                    .foregroundColor(.secondary)
-                            },
+                            title: { sourceHeader },
                             text: $inputText,
                             isReadOnly: false,
                             placeholder: "Type or drop text here...",
                             containerWidth: geometry.size.width,
                             isHovered: isHoveringSource,
-                            actions: {
-                                HStack(spacing: 8) {
-                                    Button(action: importFile) { Image(systemName: "doc.badge.plus") }
-                                        .buttonStyle(OrnamentButtonStyle())
-                                        .help("Import File (⌘I)")
-                                    
-                                    if !inputText.isEmpty {
-                                        Button(action: { withAnimation { inputText = ""; importedFileURL = nil } }) {
-                                            Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical)
-                                        }
-                                        .buttonStyle(OrnamentButtonStyle())
-                                    }
-                                }
-                            }
+                            actions: { sourceActions }
                         )
                         .onHover { isHoveringSource = $0 }
                         .dropDestination(for: URL.self) { items, _ in
@@ -88,43 +154,14 @@ public struct TranslationView: View {
                         }
                         
                         TranslationCard(
-                            title: {
-                                Menu {
-                                    ForEach(languages, id: \.self) { lang in
-                                        Button(lang) { targetLanguage = lang }
-                                    }
-                                } label: {
-                                    HStack {
-                                        Text(targetLanguage)
-                                        Image(systemName: "chevron.down").font(.system(size: 10))
-                                    }
-                                    .padding(.horizontal, 12).padding(.vertical, 6)
-                                    .background(Capsule().fill(.ultraThinMaterial))
-                                }
-                                .menuStyle(.button)
-                            },
+                            title: { targetHeader },
                             text: .constant(outputText),
                             isReadOnly: true,
                             placeholder: "Translation will appear here",
                             textColor: .blue,
                             containerWidth: geometry.size.width,
                             isHovered: isHoveringTarget,
-                            actions: {
-                                HStack(spacing: 8) {
-                                    Button(action: copyToClipboard) { Image(systemName: "doc.on.doc") }
-                                        .buttonStyle(OrnamentButtonStyle())
-                                        .disabled(outputText.isEmpty)
-                                        .help("Copy (⌘C)")
-                                    
-                                    Button(action: swapLanguages) { Image(systemName: "arrow.left.and.right") }
-                                        .buttonStyle(OrnamentButtonStyle())
-                                    
-                                    Button(action: exportFile) { Image(systemName: "square.and.arrow.up") }
-                                        .buttonStyle(OrnamentButtonStyle())
-                                        .disabled(outputText.isEmpty)
-                                        .help("Export (⌘E)")
-                                }
-                            }
+                            actions: { targetActions }
                         )
                         .onHover { isHoveringTarget = $0 }
                     }
@@ -133,25 +170,7 @@ public struct TranslationView: View {
                     Spacer()
                     
                     HStack(spacing: 20) {
-                        Button(action: translateAction) {
-                            HStack(spacing: 12) {
-                                if translationService.isTranslating {
-                                    ProgressView().controlSize(.small).tint(.white)
-                                } else {
-                                    Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
-                                }
-                                Text("Translate").font(.system(size: 18, weight: .bold, design: .rounded))
-                            }
-                            .frame(width: 220, height: 56)
-                            .background(
-                                Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : [currentAccentColor, currentAccentColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .shadow(color: currentAccentColor.opacity(inputText.isEmpty ? 0 : 0.4), radius: 15, x: 0, y: 8)
-                            )
-                            .foregroundColor(inputText.isEmpty ? .secondary : .white)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(inputText.isEmpty || translationService.isTranslating)
-                        .keyboardShortcut(.return, modifiers: .command)
+                        translateButton
                     }
                     .padding(.bottom, 50)
                 }
