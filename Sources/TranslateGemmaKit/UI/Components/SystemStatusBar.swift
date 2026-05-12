@@ -7,95 +7,105 @@ public struct SystemStatusBar: View {
     
     private func formatBytes(_ bytes: Double) -> String {
         let gb = bytes / (1024 * 1024 * 1024)
-        return String(format: "%.1f GB", gb)
+        return String(format: "%.1fG", gb)
     }
     
     public var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             StatusRow(
-                label: "CPU usage",
+                icon: "cpu",
+                label: "CPU",
                 value: systemMonitor.cpuUsage,
-                detail: "",
                 color: .blue
             )
             
             StatusRow(
-                label: "Memory usage",
+                icon: "memorychip",
+                label: "Mem",
                 value: systemMonitor.ramTotal > 0 ? systemMonitor.ramUsed / systemMonitor.ramTotal : 0,
-                detail: "",
                 color: .purple,
-                subDetail: "\(formatBytes(systemMonitor.ramUsed)) / \(formatBytes(systemMonitor.ramTotal))"
+                subDetail: "\(formatBytes(systemMonitor.ramUsed))/\(formatBytes(systemMonitor.ramTotal))"
             )
             
             StatusRow(
-                label: "GPU utilisation",
+                icon: "square.stack.3d.up",
+                label: "GPU",
                 value: systemMonitor.gpuUsage,
-                detail: "",
                 color: .teal
             )
         }
-        .padding(16)
-        .frame(width: 280)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(width: 200) // Reduced from 280
         .background(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(.ultraThinMaterial)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .stroke(.white.opacity(0.1), lineWidth: 0.5)
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .stroke(.white.opacity(0.15), lineWidth: 0.5)
                 )
         )
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: 4)
     }
 }
 
 struct StatusRow: View {
+    let icon: String
     let label: String
     let value: Double
-    let detail: String
     let color: Color
     var subDetail: String? = nil
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(label)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .foregroundColor(.secondary)
-                    if let subDetail = subDetail {
-                        Text(subDetail)
-                            .font(.system(size: 9, weight: .medium, design: .monospaced))
-                            .foregroundColor(.secondary.opacity(0.8))
-                    }
-                }
+            HStack(alignment: .center, spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(color.opacity(0.8))
+                    .frame(width: 12)
+                
+                Text(label)
+                    .font(.system(size: 10, weight: .bold, design: .rounded))
+                    .foregroundColor(.secondary)
                 
                 Spacer()
                 
+                if let subDetail = subDetail {
+                    Text(subDetail)
+                        .font(.system(size: 9, weight: .medium, design: .monospaced))
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .padding(.trailing, 4)
+                }
+                
                 Text(String(format: "%.0f%%", value * 100))
-                    .font(.system(size: 11, weight: .bold, design: .monospaced))
-                    .foregroundColor(.primary)
-                    .frame(width: 40, alignment: .trailing)
+                    .font(.system(size: 10, weight: .bold, design: .monospaced))
+                    .foregroundColor(.primary.opacity(0.9))
             }
             
             GeometryReader { geo in
                 ZStack(alignment: .leading) {
+                    // Improved background visibility with a subtle stroke
                     Capsule()
-                        .fill(.white.opacity(0.05))
-                        .frame(height: 4)
+                        .fill(.white.opacity(0.08))
+                        .overlay(
+                            Capsule()
+                                .stroke(.white.opacity(0.05), lineWidth: 0.5)
+                        )
+                        .frame(height: 3)
                     
                     Capsule()
                         .fill(
                             LinearGradient(
-                                colors: [color, color.opacity(0.6)],
+                                colors: [color, color.opacity(0.7)],
                                 startPoint: .leading,
                                 endPoint: .trailing
                             )
                         )
-                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(value))), height: 4)
-                        .shadow(color: color.opacity(0.3), radius: 4, x: 0, y: 0)
+                        .frame(width: max(0, min(geo.size.width, geo.size.width * CGFloat(value))), height: 3)
+                        .shadow(color: color.opacity(0.3), radius: 2, x: 0, y: 0)
                 }
             }
-            .frame(height: 4)
+            .frame(height: 3)
         }
     }
 }

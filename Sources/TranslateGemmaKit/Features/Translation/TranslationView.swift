@@ -180,8 +180,8 @@ public struct TranslationView: View {
                     Spacer()
                     HStack {
                         SystemStatusBar()
-                            .padding(.leading, 30)
-                            .padding(.bottom, 30)
+                            .padding(.leading, geometry.size.width > 1000 ? 30 : 20)
+                            .padding(.bottom, geometry.size.height > 700 ? 30 : 20)
                         Spacer()
                     }
                 }
