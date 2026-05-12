@@ -360,7 +360,12 @@ struct NativeTextEditor: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scrollView = NSScrollView()
         scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+        scrollView.scrollerStyle = .overlay
         scrollView.drawsBackground = false
+        
+        // Inset the content so the scrollbar appears 'shorter' and doesn't hit the edges
+        scrollView.contentInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
         
         let textView = NSTextView()
         textView.delegate = context.coordinator
@@ -445,8 +450,10 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                             .multilineTextAlignment(.leading)
                             .lineSpacing(4)
                     }
+                    .padding(.vertical, 10)
                 } else {
                     NativeTextEditor(text: $text, font: .systemFont(ofSize: fontSize, weight: .medium))
+                        .padding(.vertical, 10)
                         .frame(minHeight: 250)
                 }
             }
