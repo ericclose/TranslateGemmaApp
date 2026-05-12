@@ -12,6 +12,20 @@ public struct ModelDashboardView: View {
         return .blue
     }
     
+    enum ActiveDialog: Identifiable {
+        case delete(ModelInfo)
+        case cancelDownload(ModelInfo)
+        
+        var id: String {
+            switch self {
+            case .delete(let m): return "delete-\(m.id)"
+            case .cancelDownload(let m): return "cancel-\(m.id)"
+            }
+        }
+    }
+    
+    @State private var activeDialog: ActiveDialog? = nil
+    
     public init(selectedModelId: Binding<String>) {
         self._selectedModelId = selectedModelId
     }
@@ -49,7 +63,9 @@ public struct ModelDashboardView: View {
                         ForEach(modelManager.models) { model in
                             ModelRowView(
                                 model: model,
-                                selectedModelId: $selectedModelId
+                                selectedModelId: $selectedModelId,
+                                onDelete: { activeDialog = .delete(model) },
+                                onCancelDownload: { activeDialog = .cancelDownload(model) }
                             )
                         }
                     }
@@ -103,6 +119,39 @@ public struct ModelDashboardView: View {
                     .background(.ultraThinMaterial)
                 }
             }
+            
+            // Custom Dialog Overlay
+            if let dialog = activeDialog {
+                Group {
+                    switch dialog {
+                    case .delete(let model):
+                        CustomConfirmationDialog(
+                            title: "Delete Model?",
+                            message: "Are you sure you want to delete \(model.name)? This action cannot be undone.",
+                            confirmTitle: "Delete",
+                            isDestructive: true,
+                            onConfirm: {
+                                withAnimation { activeDialog = nil }
+                                modelManager.deleteModel(modelId: model.id)
+                                if selectedModelId == model.id { selectedModelId = "" }
+                            },
+                            onCancel: { withAnimation { activeDialog = nil } }
+                        )
+                    case .cancelDownload(let model):
+                        CustomConfirmationDialog(
+                            title: "Stop Download?",
+                            message: "Are you sure you want to cancel the download for \(model.name)?",
+                            confirmTitle: "Stop",
+                            isDestructive: true,
+                            onConfirm: {
+                                withAnimation { activeDialog = nil }
+                                modelManager.cancelDownload()
+                            },
+                            onCancel: { withAnimation { activeDialog = nil } }
+                        )
+                    }
+                }
+            }
         }
         .frame(width: 680, height: 640)
     }
@@ -113,8 +162,8 @@ struct ModelRowView: View {
     @Environment(ModelManager.self) private var modelManager
     @Binding var selectedModelId: String
     @Environment(\.colorScheme) var colorScheme
-    @State private var showDeleteConfirmation = false
-    @State private var showCancelConfirmation = false
+    let onDelete: () -> Void
+    let onCancelDownload: () -> Void
     @State private var isHovered = false
     
     var isSelected: Bool { model.id == selectedModelId }
@@ -184,7 +233,7 @@ struct ModelRowView: View {
                     .buttonStyle(.plain)
                     .help("Reveal in Finder")
                     
-                    Button(action: { showDeleteConfirmation = true }) {
+                    Button(action: onDelete) {
                         Image(systemName: "trash")
                             .font(.system(size: 12, weight: .bold))
                             .padding(8)
@@ -201,7 +250,7 @@ struct ModelRowView: View {
                             .progressViewStyle(.linear)
                             .frame(width: 120)
                             .tint(.blue)
-                        Button(action: { showCancelConfirmation = true }) {
+                        Button(action: onCancelDownload) {
                             Image(systemName: "stop.circle.fill")
                                 .font(.system(size: 20))
                                 .foregroundColor(.red.opacity(0.8))
@@ -256,22 +305,5 @@ struct ModelRowView: View {
         .contentShape(Rectangle())
         .onHover { isHovered = $0 }
         .onTapGesture { selectModel() }
-        .alert("Confirm Deletion", isPresented: $showDeleteConfirmation) {
-            Button("Delete", role: .destructive) {
-                modelManager.deleteModel(modelId: model.id)
-                if isSelected { selectedModelId = "" }
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to delete \(model.name)? This action cannot be undone.")
-        }
-        .alert("Stop Download", isPresented: $showCancelConfirmation) {
-            Button("Stop", role: .destructive) {
-                modelManager.cancelDownload()
-            }
-            Button("Continue", role: .cancel) {}
-        } message: {
-            Text("Are you sure you want to cancel the download for \(model.name)?")
-        }
     }
 }
