@@ -364,9 +364,6 @@ struct NativeTextEditor: NSViewRepresentable {
         scrollView.scrollerStyle = .overlay
         scrollView.drawsBackground = false
         
-        // Inset the content so the scrollbar appears 'shorter' and doesn't hit the edges
-        scrollView.contentInsets = NSEdgeInsets(top: 10, left: 0, bottom: 10, right: 0)
-        
         let textView = NSTextView()
         textView.delegate = context.coordinator
         textView.font = font
@@ -438,7 +435,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary.opacity(0.4))
                         .allowsHitTesting(false)
-                        .padding(.top, 2)
+                        .padding(.top, 10) // Align with NativeTextEditor vertical padding
                 }
                 
                 if isReadOnly {
