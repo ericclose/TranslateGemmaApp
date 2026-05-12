@@ -1,6 +1,6 @@
 import Foundation
 
-public struct ModelInfo: Identifiable, Sendable {
+public struct ModelInfo: Identifiable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let size: String

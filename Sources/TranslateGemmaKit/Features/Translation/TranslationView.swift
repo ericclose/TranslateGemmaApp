@@ -249,13 +249,17 @@ public struct TranslationView: View {
     }
     
     func translateAction() {
+        // Guidance: If no model is selected, open the Model Library
+        guard !selectedModelId.isEmpty else {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                showModelDashboard = true
+            }
+            return
+        }
+        
         Task {
-            let downloaded = modelManager.models.filter { $0.isDownloaded }
-            let modelIdToUse = selectedModelId.isEmpty ? downloaded.first?.id : selectedModelId
-            guard let modelId = modelIdToUse else { showModelDashboard = true; return }
-            
             do {
-                try await translationService.loadModel(modelId: modelId)
+                try await translationService.loadModel(modelId: selectedModelId)
                 if let fileURL = importedFileURL {
                     outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
                         try await translationService.translate(text: text, sourceLang: nil, targetLang: targetLanguage)
