@@ -1,35 +1,16 @@
 import Foundation
 import HuggingFace
-import Combine
+import Observation
 import AppKit
 
-public struct ModelInfo: Identifiable {
-    public let id: String
-    public let name: String
-    public let size: String
-    public var isDownloaded: Bool = false
-    public var downloadProgress: Double = 0
-    public var completedSize: Int64 = 0
-    public var totalSize: Int64 = 0
-    
-    public init(id: String, name: String, size: String, isDownloaded: Bool = false, downloadProgress: Double = 0, completedSize: Int64 = 0, totalSize: Int64 = 0) {
-        self.id = id
-        self.name = name
-        self.size = size
-        self.isDownloaded = isDownloaded
-        self.downloadProgress = downloadProgress
-        self.completedSize = completedSize
-        self.totalSize = totalSize
-    }
-}
-
+@Observable
 @MainActor
-public class ModelManager: ObservableObject {
-    @Published public var models: [ModelInfo] = []
-    @Published public var isDownloading = false
-    @Published public var isConnecting = false
-    @Published public var downloadingModelId: String? = nil
-    @Published public var currentHubPath: String = AppConfiguration.currentHubPath.path
+public class ModelManager {
+    public var models: [ModelInfo] = []
+    public var isDownloading = false
+    public var isConnecting = false
+    public var downloadingModelId: String? = nil
+    public var currentHubPath: String = AppConfiguration.currentHubPath.path
     
     private let logger = AppLogger.service("ModelManager")
     private var hubClient: HubClient { AppConfiguration.hubClient }
@@ -76,11 +57,9 @@ public class ModelManager: ObservableObject {
         downloadTask = Task {
             await MainActor.run { self.isConnecting = true }
             
-            
             do {
                 guard let repoId = Repo.ID(rawValue: modelId) else {
                     self.logger.error("Invalid Model ID: \(modelId)")
-                    print("❌ ERROR: Invalid Model ID (must be namespace/name): \(modelId)")
                     return
                 }
                 
@@ -89,18 +68,15 @@ public class ModelManager: ObservableObject {
                 }
                 
                 // --- PROGRESS SELF-HEALING SNIFFER ---
-                // Periodically check for active tasks that might bypass the Progress object (common in LFS redirects)
                 let sniffer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { _ in
                     AppConfiguration.downloadSession.getAllTasks { tasks in
                         for task in tasks {
                             let count = task.countOfBytesReceived
                             let total = task.countOfBytesExpectedToReceive
                             
-                            // If we find a significant task that is moving, update the UI
                             if count > 0 && (total > 10_000_000 || total == -1) {
                                 Task { @MainActor in
                                     if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                                        // Only update if the sniffer has more recent data than the standard callback
                                         if count > self.models[index].completedSize {
                                             self.models[index].completedSize = count
                                             if total > 0 { self.models[index].totalSize = total }
@@ -124,7 +100,6 @@ public class ModelManager: ObservableObject {
                     
                     Task { @MainActor in
                         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
-                            // Standard progress update
                             if completed > self.models[index].completedSize {
                                 self.models[index].completedSize = completed
                                 self.models[index].totalSize = total
@@ -164,7 +139,6 @@ public class ModelManager: ObservableObject {
         self.isDownloading = false
         self.downloadingModelId = nil
         
-        // Reset progress for any model that was downloading
         for i in 0..<models.count {
             if !models[i].isDownloaded {
                 models[i].downloadProgress = 0
@@ -174,19 +148,13 @@ public class ModelManager: ObservableObject {
     
     public func revealInFinder(modelId: String) {
         let path = AppConfiguration.getLocalModelPath(modelId: modelId)
-        
         if FileManager.default.fileExists(atPath: path.path) {
             NSWorkspace.shared.selectFile(nil, inFileViewerRootedAtPath: path.path)
-        } else {
-            let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-            NSWorkspace.shared.open(appSupport)
         }
     }
     
     public func deleteModel(modelId: String) {
         let hubPath = AppConfiguration.currentHubPath
-        
-        // Use unified modern ID helper from AppConfiguration
         let modernId = AppConfiguration.getModernHubId(modelId: modelId)
         let modernRepoPath = hubPath.appendingPathComponent(modernId)
         let legacyPath = hubPath.appendingPathComponent("models").appendingPathComponent(modelId)
@@ -195,14 +163,7 @@ public class ModelManager: ObservableObject {
         let pathsToDelete = [modernRepoPath, legacyPath, lockPath]
         
         for path in pathsToDelete {
-            do {
-                if FileManager.default.fileExists(atPath: path.path) {
-                    try FileManager.default.removeItem(at: path)
-                    logger.info("Deleted model resource at: \(path.path)")
-                }
-            } catch {
-                logger.error("Failed to delete model resource at \(path.path): \(error.localizedDescription)")
-            }
+            try? FileManager.default.removeItem(at: path)
         }
         
         if let index = self.models.firstIndex(where: { $0.id == modelId }) {
@@ -215,24 +176,16 @@ public class ModelManager: ObservableObject {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
-        panel.allowsMultipleSelection = false
-        panel.message = "Please select the Hugging Face Hub storage directory"
-        panel.prompt = "Select Directory"
-        
         if panel.runModal() == .OK, let url = panel.url {
             AppConfiguration.updateHubPath(url)
             self.currentHubPath = url.path
-            Task {
-                await fetchCollectionModels()
-            }
+            Task { await fetchCollectionModels() }
         }
     }
     
     public func resetToDefaultHubPath() {
         AppConfiguration.resetHubPath()
         self.currentHubPath = AppConfiguration.currentHubPath.path
-        Task {
-            await fetchCollectionModels()
-        }
+        Task { await fetchCollectionModels() }
     }
 }

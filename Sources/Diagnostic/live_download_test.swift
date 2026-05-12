@@ -1,7 +1,6 @@
 import Foundation
-import TranslateGemmaLibrary
+import TranslateGemmaKit
 import HuggingFace
-import Combine
 
 @main
 struct LiveDownloadTest {
@@ -19,24 +18,9 @@ struct LiveDownloadTest {
         await manager.fetchCollectionModels()
         
         print("⏳ Preparing download...")
-        let startTime = Date()
-        var cancellables = Set<AnyCancellable>()
         
-        await MainActor.run {
-            manager.$models
-                .receive(on: RunLoop.main)
-                .sink { models in
-                    guard let model = models.first(where: { $0.id == modelId }) else { return }
-                    // 脚本层只管显示
-                    if model.completedSize > 0 {
-                        print(String(format: "[%.1fs] %.2f%% (%lld bytes)", 
-                                     Date().timeIntervalSince(startTime), 
-                                     model.downloadProgress * 100,
-                                     model.completedSize))
-                    }
-                }
-                .store(in: &cancellables)
-        }
+        // In a script, we can't easily observe changes with @Observable without a run loop
+        // So we'll just check periodically or just run the download.
         
         await manager.downloadModel(modelId: modelId)
         print("✅ Finished.")

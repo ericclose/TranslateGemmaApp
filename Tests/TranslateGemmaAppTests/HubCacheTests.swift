@@ -1,7 +1,7 @@
 import XCTest
 import Foundation
 import HuggingFace
-@testable import TranslateGemmaLibrary
+@testable import TranslateGemmaKit
 
 final class HubCacheTests: XCTestCase {
     

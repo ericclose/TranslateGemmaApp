@@ -7,7 +7,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "TranslateGemmaLibrary", targets: ["TranslateGemmaLibrary"]),
+        .library(name: "TranslateGemmaKit", targets: ["TranslateGemmaKit"]),
         .executable(name: "TranslateGemmaApp", targets: ["TranslateGemmaApp"]),
     ],
     dependencies: [
@@ -15,10 +15,11 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", from: "3.31.3"),
         .package(url: "https://github.com/huggingface/swift-transformers", from: "1.3.2"),
         .package(url: "https://github.com/huggingface/swift-huggingface.git", from: "0.9.0"),
+        .package(url: "https://github.com/nalexn/ViewInspector.git", from: "0.10.1"),
     ],
     targets: [
         .target(
-            name: "TranslateGemmaLibrary",
+            name: "TranslateGemmaKit",
             dependencies: [
                 .product(name: "MLX", package: "mlx-swift"),
                 .product(name: "MLXRandom", package: "mlx-swift"),
@@ -32,7 +33,7 @@ let package = Package(
         .executableTarget(
             name: "TranslateGemmaApp",
             dependencies: [
-                "TranslateGemmaLibrary",
+                "TranslateGemmaKit",
                 .product(name: "MLX", package: "mlx-swift"),
             ],
             exclude: [
@@ -46,7 +47,7 @@ let package = Package(
         .executableTarget(
             name: "LiveDownloadTest",
             dependencies: [
-                "TranslateGemmaLibrary",
+                "TranslateGemmaKit",
                 .product(name: "HuggingFace", package: "swift-huggingface"),
             ],
             path: "Sources/Diagnostic",
@@ -54,7 +55,10 @@ let package = Package(
         ),
         .testTarget(
             name: "TranslateGemmaAppTests",
-            dependencies: ["TranslateGemmaLibrary"]
+            dependencies: [
+                "TranslateGemmaKit",
+                .product(name: "ViewInspector", package: "ViewInspector"),
+            ]
         ),
     ]
 )

@@ -1,5 +1,5 @@
 import XCTest
-import TranslateGemmaLibrary
+import TranslateGemmaKit
 
 final class TranslateGemmaAppTests: XCTestCase {
     func testTranslation() async throws {
