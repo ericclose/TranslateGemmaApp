@@ -22,7 +22,23 @@ public struct TranslationView: View {
     @State private var isHoveringSource = false
     @State private var isHoveringTarget = false
     
-    let languages = ["Chinese", "English", "Japanese", "Korean", "French", "German", "Spanish"]
+    let languages = [
+        "Arabic (Egypt)", "Arabic (Saudi Arabia)", "Bulgarian (Bulgaria)", "Bengali (Bangladesh)",
+        "Bengali (India)", "Catalan (Spain)", "Czech (Czechia)", "Danish (Denmark)",
+        "German (Germany)", "Greek (Greece)", "Spanish (Mexico)", "Estonian (Estonia)",
+        "Farsi (Iran)", "Finnish (Finland)", "Filipino (Philippines)", "French (Canada)",
+        "French (France)", "Gujarati (India)", "Hebrew (Israel)", "Hindi (India)",
+        "Croatian (Croatia)", "Hungarian (Hungary)", "Indonesian (Indonesia)", "Icelandic (Iceland)",
+        "Italian (Italy)", "Japanese (Japan)", "Kannada (India)", "Korean (South Korea)",
+        "Lithuanian (Lithuania)", "Latvian (Latvia)", "Malayalam (India)", "Marathi (India)",
+        "Dutch (Netherlands)", "Norwegian (Norway)", "Punjabi (India)", "Polish (Poland)",
+        "Portuguese (Brazil)", "Portuguese (Portugal)", "Romanian (Romania)", "Russian (Russia)",
+        "Slovak (Slovakia)", "Slovenian (Slovenia)", "Serbian (Serbia)", "Swedish (Sweden)",
+        "Swahili (Kenya)", "Swahili (Tanzania)", "Tamil (India)", "Telugu (India)",
+        "Thai (Thailand)", "Turkish (Turkey)", "Ukrainian (Ukraine)", "Urdu (Pakistan)",
+        "Vietnamese (Vietnam)", "Mandarin (China)", "Mandarin (Taiwan)", "Zulu (South Africa)",
+        "English"
+    ].sorted()
     
     public init() {}
     
@@ -97,39 +113,41 @@ public struct TranslationView: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showLanguagePicker, arrowEdge: .bottom) {
-            VStack(alignment: .center, spacing: 2) {
-                ForEach(languages, id: \.self) { lang in
-                    Button(action: {
-                        targetLanguage = lang
-                        showLanguagePicker = false
-                    }) {
-                        ZStack {
-                            Text(lang)
-                                .font(.system(size: 12, weight: .medium, design: .rounded))
-                                .frame(maxWidth: .infinity, alignment: .center)
-                            
-                            HStack {
-                                Spacer()
-                                if targetLanguage == lang {
-                                    Image(systemName: "checkmark")
-                                        .font(.system(size: 10, weight: .bold))
-                                        .foregroundColor(currentAccentColor)
+            ScrollView {
+                VStack(alignment: .center, spacing: 2) {
+                    ForEach(languages, id: \.self) { lang in
+                        Button(action: {
+                            targetLanguage = lang
+                            showLanguagePicker = false
+                        }) {
+                            ZStack {
+                                Text(lang)
+                                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                
+                                HStack {
+                                    Spacer()
+                                    if targetLanguage == lang {
+                                        Image(systemName: "checkmark")
+                                            .font(.system(size: 10, weight: .bold))
+                                            .foregroundColor(currentAccentColor)
+                                    }
                                 }
                             }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .contentShape(Rectangle())
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(targetLanguage == lang ? currentAccentColor.opacity(0.1) : .clear)
+                            )
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .contentShape(Rectangle())
-                        .background(
-                            RoundedRectangle(cornerRadius: 6)
-                                .fill(targetLanguage == lang ? currentAccentColor.opacity(0.1) : .clear)
-                        )
+                        .buttonStyle(.plain)
                     }
-                    .buttonStyle(.plain)
                 }
+                .padding(6)
             }
-            .padding(6)
-            .frame(width: 140)
+            .frame(width: 160, height: 400) // Increased width and added height
             .background(VisualEffectView(material: .popover, blendingMode: .withinWindow))
         }
     }
