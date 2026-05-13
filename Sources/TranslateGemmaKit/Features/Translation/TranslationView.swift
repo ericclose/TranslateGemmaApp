@@ -282,6 +282,9 @@ public struct TranslationView: View {
                 }
             }
         }
+        .onChange(of: inputText) { _, _ in
+            translationService.recordActivity()
+        }
     }
     
     func importFile() {
