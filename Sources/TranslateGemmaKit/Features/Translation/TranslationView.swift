@@ -83,6 +83,14 @@ public struct TranslationView: View {
     }
     
     @State private var showLanguagePicker = false
+    @State private var languageSearchText = ""
+    
+    private var filteredLanguages: [String] {
+        if languageSearchText.isEmpty {
+            return languages
+        }
+        return languages.filter { $0.lowercased().contains(languageSearchText.lowercased()) }
+    }
     
     @ViewBuilder
     private var targetHeader: some View {
@@ -113,44 +121,62 @@ public struct TranslationView: View {
         }
         .buttonStyle(.plain)
         .popover(isPresented: $showLanguagePicker, arrowEdge: .bottom) {
-            ScrollView {
-                VStack(alignment: .center, spacing: 2) {
-                    ForEach(languages, id: \.self) { lang in
-                        Button(action: {
-                            targetLanguage = lang
-                            showLanguagePicker = false
-                        }) {
-                            ZStack {
-                                Text(lang)
-                                    .font(.system(size: 12, weight: .medium, design: .rounded))
-                                    .frame(maxWidth: .infinity, alignment: .center)
-                                
-                                HStack {
-                                    Spacer()
-                                    if targetLanguage == lang {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 10, weight: .bold))
-                                            .foregroundColor(currentAccentColor)
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .contentShape(Rectangle())
-                            .background(
-                                RoundedRectangle(cornerRadius: 6)
-                                    .fill(targetLanguage == lang ? currentAccentColor.opacity(0.1) : .clear)
-                            )
+            VStack(spacing: 0) {
+                // Search Field
+                HStack {
+                    Image(systemName: "magnifyingglass")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.secondary)
+                    TextField("Search language...", text: $languageSearchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 12, design: .rounded))
+                    if !languageSearchText.isEmpty {
+                        Button(action: { languageSearchText = "" }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(.secondary)
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .padding(6)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.black.opacity(0.05))
+                
+                Divider().opacity(0.5)
+                
+                ScrollView {
+                    VStack(alignment: .center, spacing: 1) {
+                        if filteredLanguages.isEmpty {
+                            Text("No results")
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .center)
+                                .padding(.vertical, 20)
+                        } else {
+                            ForEach(filteredLanguages, id: \.self) { lang in
+                                LanguageRow(
+                                    lang: lang,
+                                    isSelected: targetLanguage == lang,
+                                    accentColor: currentAccentColor
+                                ) {
+                                    targetLanguage = lang
+                                    showLanguagePicker = false
+                                    languageSearchText = ""
+                                }
+                            }
+                        }
+                    }
+                    .padding(4)
+                }
+                .scrollIndicators(.hidden)
+                .background(Color.clear)
             }
-            .frame(width: 160, height: 400) // Increased width and added height
+            .frame(width: 200, height: 350)
             .background(VisualEffectView(material: .popover, blendingMode: .withinWindow))
         }
     }
+
     
     @ViewBuilder
     private var targetActions: some View {
@@ -370,5 +396,48 @@ public struct AdaptiveLayout<Content: View>: View {
     public var body: some View {
         HStack(spacing: 24) { content }
             .frame(maxWidth: min(width - 64, 1600))
+    }
+}
+
+struct LanguageRow: View {
+    let lang: String
+    let isSelected: Bool
+    let accentColor: Color
+    let action: () -> Void
+    
+    @State private var isHovering = false
+    
+    var body: some View {
+        Button(action: action) {
+            ZStack {
+                Text(lang)
+                    .font(.system(size: 12, weight: isSelected ? .semibold : .medium, design: .rounded))
+                    .foregroundColor(isSelected ? accentColor : .primary)
+                    .lineLimit(1)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                
+                HStack {
+                    Spacer()
+                    if isSelected {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(accentColor)
+                    }
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .contentShape(Rectangle())
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isSelected ? accentColor.opacity(0.12) : (isHovering ? Color.primary.opacity(0.05) : .clear))
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            withAnimation(.easeInOut(duration: 0.15)) {
+                isHovering = hovering
+            }
+        }
     }
 }
