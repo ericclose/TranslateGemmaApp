@@ -43,9 +43,7 @@ public struct TranslationView: View {
     public init() {}
     
     private var currentAccentColor: Color {
-        if selectedModelId.contains("27b") { return .purple }
-        if selectedModelId.contains("12b") { return .indigo }
-        return .blue
+        .blue
     }
     
     private var detectedSourceLanguage: String? {

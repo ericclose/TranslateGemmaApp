@@ -38,14 +38,12 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                 }
                 
                 if isReadOnly {
-                    ScrollView {
-                        Text(text.isEmpty ? "" : text)
-                            .font(.system(size: fontSize, weight: .medium, design: .rounded))
-                            .foregroundColor(textColor)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .multilineTextAlignment(.leading)
-                            .lineSpacing(4)
-                    }
+                    NativeTextEditor(
+                        text: .constant(text),
+                        font: .systemFont(ofSize: fontSize, weight: .medium),
+                        textColor: textColor == .primary ? .labelColor : .systemBlue,
+                        isReadOnly: true
+                    )
                     .padding(.bottom, 10)
                     .padding(.top, 4)
                 } else {

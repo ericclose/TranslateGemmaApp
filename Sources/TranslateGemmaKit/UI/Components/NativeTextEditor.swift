@@ -5,11 +5,13 @@ public struct NativeTextEditor: NSViewRepresentable {
     @Binding var text: String
     var font: NSFont
     var textColor: NSColor = .labelColor
+    var isReadOnly: Bool = false
     
-    public init(text: Binding<String>, font: NSFont, textColor: NSColor = .labelColor) {
+    public init(text: Binding<String>, font: NSFont, textColor: NSColor = .labelColor, isReadOnly: Bool = false) {
         self._text = text
         self.font = font
         self.textColor = textColor
+        self.isReadOnly = isReadOnly
     }
     
     public func makeNSView(context: Context) -> NSScrollView {
@@ -28,8 +30,14 @@ public struct NativeTextEditor: NSViewRepresentable {
         textView.isHorizontallyResizable = false
         textView.isVerticallyResizable = true
         textView.autoresizingMask = [.width]
-        textView.textContainerInset = .zero
-        textView.textContainer?.lineFragmentPadding = 0
+        
+        // Configure behavior based on isReadOnly
+        textView.isEditable = !isReadOnly
+        textView.isSelectable = true // Always allow selection
+        
+        // Use standard text container settings
+        textView.textContainerInset = NSSize(width: 0, height: 0)
+        textView.textContainer?.lineFragmentPadding = 5
         
         scrollView.documentView = textView
         return scrollView
@@ -41,6 +49,8 @@ public struct NativeTextEditor: NSViewRepresentable {
             textView.string = text
         }
         textView.font = font
+        textView.textColor = textColor
+        textView.isEditable = !isReadOnly
     }
     
     public func makeCoordinator() -> Coordinator {
