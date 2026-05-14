@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import NaturalLanguage
 import os
 
 private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
@@ -39,23 +38,7 @@ public struct TranslationView: View {
     @State private var isDraggingOver = false
     @State private var currentTranslationTask: Task<Void, Never>? = nil
 
-    let languages = [
-        "Arabic (Egypt)", "Arabic (Saudi Arabia)", "Bulgarian (Bulgaria)", "Bengali (Bangladesh)",
-        "Bengali (India)", "Catalan (Spain)", "Czech (Czechia)", "Danish (Denmark)",
-        "German (Germany)", "Greek (Greece)", "Spanish (Mexico)", "Estonian (Estonia)",
-        "Persian (Farsi)", "Finnish (Finland)", "Filipino (Tagalog)", "French (Canada)",
-        "French (France)", "Gujarati (India)", "Hebrew (Israel)", "Hindi (India)",
-        "Croatian (Croatia)", "Hungarian (Hungary)", "Indonesian (Indonesia)", "Icelandic (Iceland)",
-        "Italian (Italy)", "Japanese (Japan)", "Kannada (India)", "Korean (South Korea)",
-        "Lithuanian (Lithuania)", "Latvian (Latvia)", "Malayalam (India)", "Marathi (India)",
-        "Dutch (Netherlands)", "Norwegian (Norway)", "Punjabi (India)", "Polish (Poland)",
-        "Portuguese (Brazil)", "Portuguese (Portugal)", "Romanian (Romania)", "Russian (Russia)",
-        "Slovak (Slovakia)", "Slovenian (Slovenia)", "Serbian (Serbia)", "Swedish (Sweden)",
-        "Swahili (Kenya)", "Swahili (Tanzania)", "Tamil (India)", "Telugu (India)",
-        "Thai (Thailand)", "Turkish (Turkey)", "Ukrainian (Ukraine)", "Urdu (Pakistan)",
-        "Vietnamese (Vietnam)", "Chinese (Simplified)", "Chinese (Traditional)", "Zulu (South Africa)",
-        "English"
-    ].sorted()
+    let languages = LanguageManager.supportedLanguages
     
     public init() {}
     
@@ -66,17 +49,7 @@ public struct TranslationView: View {
     }
     
     private var detectedSourceLanguage: String? {
-        guard !inputText.isEmpty else { return nil }
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(inputText)
-        guard let languageCode = recognizer.dominantLanguage?.rawValue else { return nil }
-        
-        if languageCode == "zh-Hant" { return "Chinese (Traditional)" }
-        if languageCode.hasPrefix("zh") { return "Chinese (Simplified)" }
-        if languageCode.hasPrefix("en") { return "English" }
-        
-        let locale = Locale(identifier: "en")
-        return locale.localizedString(forLanguageCode: languageCode)?.capitalized
+        LanguageManager.detectLanguage(for: inputText)
     }
 
     private func filteredLanguages(includeAuto: Bool) -> [String] {
@@ -260,7 +233,7 @@ public struct TranslationView: View {
     
     @ViewBuilder
     private func textTranslationView(geometry: GeometryProxy) -> some View {
-        AdaptiveLayout(width: geometry.size.width) {
+        HStack(spacing: 24) {
             TranslationCard(
                 title: { sourceActions },
                 text: $inputText,
@@ -284,6 +257,8 @@ public struct TranslationView: View {
             )
             .onHover { isHoveringTarget = $0 }
         }
+        .frame(maxWidth: min(geometry.size.width - 64, 1600))
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 40)
     }
     
@@ -592,8 +567,7 @@ public struct TranslationView: View {
     }
     
     private func getLangCode(_ name: String) -> String {
-        let mapping = ["Chinese (Simplified)": "zh", "Chinese (Traditional)": "zh-tw", "English": "en", "Japanese (Japan)": "ja", "Korean (South Korea)": "ko"]
-        return mapping[name] ?? name.prefix(2).lowercased()
+        LanguageManager.getShortCode(for: name)
     }
     
     @ViewBuilder
@@ -715,21 +689,6 @@ struct TaskCard: View {
 }
 
 
-public struct AdaptiveLayout<Content: View>: View {
-    let width: CGFloat
-    @ViewBuilder let content: Content
-    
-    public init(width: CGFloat, @ViewBuilder content: () -> Content) {
-        self.width = width
-        self.content = content()
-    }
-    
-    public var body: some View {
-        HStack(spacing: 24) { content }
-            .frame(maxWidth: min(width - 64, 1600))
-            .frame(maxWidth: .infinity)
-    }
-}
 
 struct LanguageRow: View {
     let lang: String

@@ -211,81 +211,10 @@ public class TranslationService {
     
     private func getLanguageCode(_ language: String?) -> String? {
         guard let language = language, language != "Auto" else { return nil }
-        
-        let mapping: [String: String] = [
-            "Arabic (Egypt)": "ar_EG",
-            "Arabic (Saudi Arabia)": "ar_SA",
-            "Bulgarian (Bulgaria)": "bg_BG",
-            "Bengali (Bangladesh)": "bn_BD",
-            "Bengali (India)": "bn_IN",
-            "Catalan (Spain)": "ca_ES",
-            "Czech (Czechia)": "cs_CZ",
-            "Danish (Denmark)": "da_DK",
-            "German (Germany)": "de_DE",
-            "Greek (Greece)": "el_GR",
-            "Spanish (Mexico)": "es_MX",
-            "Estonian (Estonia)": "et_EE",
-            "Persian (Farsi)": "fa_IR",
-            "Finnish (Finland)": "fi_FI",
-            "Filipino (Tagalog)": "fil_PH",
-            "French (Canada)": "fr_CA",
-            "French (France)": "fr_FR",
-            "Gujarati (India)": "gu_IN",
-            "Hebrew (Israel)": "he_IL",
-            "Hindi (India)": "hi_IN",
-            "Croatian (Croatia)": "hr_HR",
-            "Hungarian (Hungary)": "hu_HU",
-            "Indonesian (Indonesia)": "id_ID",
-            "Icelandic (Iceland)": "is_IS",
-            "Italian (Italy)": "it_IT",
-            "Japanese (Japan)": "ja_JP",
-            "Kannada (India)": "kn_IN",
-            "Korean (South Korea)": "ko_KR",
-            "Lithuanian (Lithuania)": "lt_LT",
-            "Latvian (Latvia)": "lv_LV",
-            "Malayalam (India)": "ml_IN",
-            "Marathi (India)": "mr_IN",
-            "Dutch (Netherlands)": "nl_NL",
-            "Norwegian (Norway)": "no_NO",
-            "Punjabi (India)": "pa_IN",
-            "Polish (Poland)": "pl_PL",
-            "Portuguese (Brazil)": "pt_BR",
-            "Portuguese (Portugal)": "pt_PT",
-            "Romanian (Romania)": "ro_RO",
-            "Russian (Russia)": "ru_RU",
-            "Slovak (Slovakia)": "sk_SK",
-            "Slovenian (Slovenia)": "sl_SI",
-            "Serbian (Serbia)": "sr_RS",
-            "Swedish (Sweden)": "sv_SE",
-            "Swahili (Kenya)": "sw_KE",
-            "Swahili (Tanzania)": "sw_TZ",
-            "Tamil (India)": "ta_IN",
-            "Telugu (India)": "te_IN",
-            "Thai (Thailand)": "th_TH",
-            "Turkish (Turkey)": "tr_TR",
-            "Ukrainian (Ukraine)": "uk_UA",
-            "Urdu (Pakistan)": "ur_PK",
-            "Vietnamese (Vietnam)": "vi_VN",
-            "Chinese (Simplified)": "zh_CN",
-            "Chinese (Traditional)": "zh_TW",
-            "Zulu (South Africa)": "zu_ZA",
-            "English": "en"
-        ]
-        
-        return mapping[language] ?? language.lowercased()
+        return LanguageManager.getCode(for: language)
     }
     
     private func detectLanguageCode(for text: String) -> String {
-        let recognizer = NLLanguageRecognizer()
-        recognizer.processString(text)
-        
-        // TranslateGemma specifically likes 'zh_CN' or 'zh_TW' for Chinese
-        if let languageCode = recognizer.dominantLanguage?.rawValue {
-            if languageCode == "zh-Hant" { return "zh_TW" }
-            if languageCode.hasPrefix("zh") { return "zh_CN" }
-            return languageCode
-        }
-        
-        return "en" // Default fallback
+        return LanguageManager.detectLanguageCode(for: text)
     }
 }

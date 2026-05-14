@@ -30,28 +30,34 @@ public class TranslationController {
         tasks.removeAll(where: { $0.id == task.id })
     }
     
-    public func processFile(url: URL, targetLang: String, translator: (String) async throws -> String) async throws -> String {
+    public func processFile(url: URL, targetLang: String, onProgress: ((Int, Int) -> Void)? = nil, translator: (String) async throws -> String) async throws -> String {
         let content = try String(contentsOf: url)
         let ext = url.pathExtension.lowercased()
         
         switch ext {
         case "srt":
             var paragraphs = srtParser.parse(content: content)
-            for i in 0..<paragraphs.count {
+            let total = paragraphs.count
+            for i in 0..<total {
+                onProgress?(i + 1, total)
                 paragraphs[i].text = try await translator(paragraphs[i].text)
             }
             return srtParser.write(paragraphs: paragraphs)
             
         case "vtt":
             var paragraphs = vttParser.parse(content: content)
-            for i in 0..<paragraphs.count {
+            let total = paragraphs.count
+            for i in 0..<total {
+                onProgress?(i + 1, total)
                 paragraphs[i].text = try await translator(paragraphs[i].text)
             }
             return vttParser.write(paragraphs: paragraphs)
             
         case "ass":
             var paragraphs = assParser.parse(content: content)
-            for i in 0..<paragraphs.count {
+            let total = paragraphs.count
+            for i in 0..<total {
+                onProgress?(i + 1, total)
                 paragraphs[i].text = try await translator(paragraphs[i].text)
             }
             return assParser.write(paragraphs: paragraphs)
@@ -59,15 +65,22 @@ public class TranslationController {
         case "md", "markdown":
             let chunks = mdParser.parseForTranslation(content: content)
             var translatedTexts: [String] = []
+            let translatableCount = chunks.filter { if case .text = $0 { return true }; return false }.count
+            var current = 0
             for chunk in chunks {
                 if case .text(let t) = chunk {
+                    current += 1
+                    onProgress?(current, translatableCount)
                     translatedTexts.append(try await translator(t))
                 }
             }
             return mdParser.assemble(chunks: chunks, translatedTexts: translatedTexts)
             
         default:
-            return try await translator(content)
+            onProgress?(0, 1)
+            let result = try await translator(content)
+            onProgress?(1, 1)
+            return result
         }
     }
     
@@ -82,55 +95,25 @@ public class TranslationController {
             let outputURL = generateOutputURL(for: url, targetLang: targetLang)
             
             do {
-                // Check write permission
                 let folderURL = url.deletingLastPathComponent()
                 if !FileManager.default.isWritableFile(atPath: folderURL.path) {
                     throw NSError(domain: "TranslationController", code: 1, userInfo: [NSLocalizedDescriptionKey: "No write permission in directory: \(folderURL.lastPathComponent)"])
                 }
                 
-                // Load model
                 try await translationService.loadModel(modelId: selectedModelId)
                 
-                let content = try String(contentsOf: url)
-                let ext = url.pathExtension.lowercased()
-                let result: String
-                
-                switch ext {
-                case "srt", "vtt", "ass":
-                    let parser: SubtitleParser
-                    if ext == "srt" { parser = srtParser }
-                    else if ext == "vtt" { parser = vttParser }
-                    else { parser = assParser }
-                    var paragraphs = parser.parse(content: content)
-                    let total = paragraphs.count
-                    for j in 0..<total {
-                        tasks[i].status = .processing(current: j + 1, total: total)
-                        paragraphs[j].text = try await translateWithStreaming(text: paragraphs[j].text, targetLang: targetLang, service: translationService)
+                let result = try await processFile(
+                    url: url,
+                    targetLang: targetLang,
+                    onProgress: { current, total in
+                        self.tasks[i].status = .processing(current: current, total: total)
                     }
-                    result = parser.write(paragraphs: paragraphs)
-                    
-                case "md", "markdown":
-                    let chunks = mdParser.parseForTranslation(content: content)
-                    var translatedTexts: [String] = []
-                    let translatableCount = chunks.filter { if case .text = $0 { return true }; return false }.count
-                    var current = 0
-                    for chunk in chunks {
-                        if case .text(let t) = chunk {
-                            current += 1
-                            tasks[i].status = .processing(current: current, total: translatableCount)
-                            translatedTexts.append(try await translateWithStreaming(text: t, targetLang: targetLang, service: translationService))
-                        }
-                    }
-                    result = mdParser.assemble(chunks: chunks, translatedTexts: translatedTexts)
-                    
-                default:
-                    tasks[i].status = .processing(current: 0, total: 1)
-                    result = try await translateWithStreaming(text: content, targetLang: targetLang, service: translationService)
+                ) { text in
+                    return try await self.translateWithStreaming(text: text, targetLang: targetLang, service: translationService)
                 }
                 
                 try result.write(to: outputURL, atomically: true, encoding: .utf8)
                 tasks[i].status = .completed(outputURL: outputURL)
-                
             } catch {
                 tasks[i].status = .failed(error.localizedDescription)
             }
@@ -146,13 +129,12 @@ public class TranslationController {
     }
     
     private func generateOutputURL(for url: URL, targetLang: String) -> URL {
-        let langCode = getLangCode(targetLang)
+        let langCode = LanguageManager.getShortCode(for: targetLang)
         let fileName = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
         let newName = "\(fileName).\(langCode).\(ext)"
         let outputURL = url.deletingLastPathComponent().appendingPathComponent(newName)
         
-        // Conflict handling: if exists, add index
         if FileManager.default.fileExists(atPath: outputURL.path) {
             var index = 1
             var indexedURL: URL
@@ -165,21 +147,6 @@ public class TranslationController {
         }
         
         return outputURL
-    }
-    
-    private func getLangCode(_ name: String) -> String {
-        let mapping = [
-            "Chinese (Simplified)": "zh",
-            "Chinese (Traditional)": "zh-tw",
-            "English": "en",
-            "Japanese (Japan)": "ja",
-            "Korean (South Korea)": "ko",
-            "French (France)": "fr",
-            "German (Germany)": "de",
-            "Spanish (Mexico)": "es",
-            "Russian (Russia)": "ru"
-        ]
-        return mapping[name] ?? name.prefix(2).lowercased()
     }
 }
 
