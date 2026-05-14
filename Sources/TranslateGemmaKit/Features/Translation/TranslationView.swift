@@ -333,33 +333,33 @@ public struct TranslationView: View {
                 )
             }
         }
-        .frame(maxWidth: 800)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: min(geometry.size.width - 64, 1600))
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 40)
     }
     
     @ViewBuilder
     private var dropZone: some View {
-        VStack(spacing: 24) {
-            ZStack {
-                Circle()
-                    .fill(currentAccentColor.opacity(0.1))
-                    .frame(width: 120, height: 120)
+        Button(action: importBatchFiles) {
+            VStack(spacing: 24) {
+                ZStack {
+                    Circle()
+                        .fill(currentAccentColor.opacity(0.1))
+                        .frame(width: 120, height: 120)
+                    
+                    Image(systemName: "doc.on.doc")
+                        .font(.system(size: 48))
+                        .foregroundColor(currentAccentColor)
+                }
                 
-                Image(systemName: "doc.on.doc")
-                    .font(.system(size: 48))
-                    .foregroundColor(currentAccentColor)
-            }
-            
-            VStack(spacing: 8) {
-                Text("Drop Subtitle or Markdown Files")
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                Text("Supports SRT, VTT, ASS, and Markdown")
-                    .font(.system(size: 14))
-                    .foregroundColor(.secondary)
-            }
-            
-            Button(action: importBatchFiles) {
+                VStack(spacing: 8) {
+                    Text("Drop Subtitle or Markdown Files")
+                        .font(.system(size: 20, weight: .bold, design: .rounded))
+                    Text("Supports SRT, VTT, ASS, and Markdown")
+                        .font(.system(size: 14))
+                        .foregroundColor(.secondary)
+                }
+                
                 Text("Browse Files")
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .padding(.horizontal, 24)
@@ -367,10 +367,10 @@ public struct TranslationView: View {
                     .background(Capsule().fill(currentAccentColor))
                     .foregroundColor(.white)
             }
-            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
-        .frame(height: 400)
+        .buttonStyle(.plain)
         .background(
             RoundedRectangle(cornerRadius: 32)
                 .strokeBorder(currentAccentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8, 8]))
