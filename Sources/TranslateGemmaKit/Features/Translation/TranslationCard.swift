@@ -19,7 +19,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
     }
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .center) {
                 title
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -34,7 +34,7 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                         .font(.system(size: fontSize, weight: .medium, design: .rounded))
                         .foregroundColor(.secondary.opacity(0.4))
                         .allowsHitTesting(false)
-                        .padding(.top, 10)
+                        .padding(.top, 4)
                 }
                 
                 if isReadOnly {
@@ -46,15 +46,19 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                             .multilineTextAlignment(.leading)
                             .lineSpacing(4)
                     }
-                    .padding(.vertical, 10)
+                    .padding(.bottom, 10)
+                    .padding(.top, 4)
                 } else {
                     NativeTextEditor(text: $text, font: .systemFont(ofSize: fontSize, weight: .medium))
-                        .padding(.vertical, 10)
+                        .padding(.bottom, 10)
+                        .padding(.top, 4)
                         .frame(minHeight: 250)
                 }
             }
         }
-        .padding(geometryPadding)
+        .padding(.horizontal, geometryPadding)
+        .padding(.bottom, geometryPadding)
+        .padding(.top, geometryPadding * 0.6)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(
             ZStack {
