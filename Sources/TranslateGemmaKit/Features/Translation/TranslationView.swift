@@ -13,7 +13,7 @@ public struct TranslationView: View {
     
     @State private var inputText: String = ""
     @State private var outputText: String = ""
-    @State private var targetLanguage: String = "Chinese"
+    @State private var targetLanguage: String = "Chinese (Simplified)"
     @State private var showModelDashboard = false
     @State private var importedFileURL: URL? = nil
     @State private var errorMessage: String? = nil
@@ -26,7 +26,7 @@ public struct TranslationView: View {
         "Arabic (Egypt)", "Arabic (Saudi Arabia)", "Bulgarian (Bulgaria)", "Bengali (Bangladesh)",
         "Bengali (India)", "Catalan (Spain)", "Czech (Czechia)", "Danish (Denmark)",
         "German (Germany)", "Greek (Greece)", "Spanish (Mexico)", "Estonian (Estonia)",
-        "Farsi (Iran)", "Finnish (Finland)", "Filipino (Philippines)", "French (Canada)",
+        "Persian (Farsi)", "Finnish (Finland)", "Filipino (Tagalog)", "French (Canada)",
         "French (France)", "Gujarati (India)", "Hebrew (Israel)", "Hindi (India)",
         "Croatian (Croatia)", "Hungarian (Hungary)", "Indonesian (Indonesia)", "Icelandic (Iceland)",
         "Italian (Italy)", "Japanese (Japan)", "Kannada (India)", "Korean (South Korea)",
@@ -36,7 +36,7 @@ public struct TranslationView: View {
         "Slovak (Slovakia)", "Slovenian (Slovenia)", "Serbian (Serbia)", "Swedish (Sweden)",
         "Swahili (Kenya)", "Swahili (Tanzania)", "Tamil (India)", "Telugu (India)",
         "Thai (Thailand)", "Turkish (Turkey)", "Ukrainian (Ukraine)", "Urdu (Pakistan)",
-        "Vietnamese (Vietnam)", "Mandarin (China)", "Mandarin (Taiwan)", "Zulu (South Africa)",
+        "Vietnamese (Vietnam)", "Chinese (Simplified)", "Chinese (Traditional)", "Zulu (South Africa)",
         "English"
     ].sorted()
     
@@ -120,7 +120,7 @@ public struct TranslationView: View {
             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $showLanguagePicker, arrowEdge: .bottom) {
+        .popover(isPresented: $showLanguagePicker, arrowEdge: .top) {
             VStack(spacing: 0) {
                 // Search Field
                 HStack {
@@ -173,7 +173,6 @@ public struct TranslationView: View {
                 .background(Color.clear)
             }
             .frame(width: 200, height: 350)
-            .background(VisualEffectView(material: .popover, blendingMode: .withinWindow))
         }
     }
 
@@ -354,7 +353,7 @@ public struct TranslationView: View {
     }
     
     func swapLanguages() {
-        targetLanguage = (targetLanguage == "English") ? "Chinese" : "English"
+        targetLanguage = (targetLanguage == "English") ? "Chinese (Simplified)" : "English"
     }
     
     func translateAction() {

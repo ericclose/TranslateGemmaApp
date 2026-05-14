@@ -223,9 +223,9 @@ public class TranslationService {
             "Greek (Greece)": "el_GR",
             "Spanish (Mexico)": "es_MX",
             "Estonian (Estonia)": "et_EE",
-            "Farsi (Iran)": "fa_IR",
+            "Persian (Farsi)": "fa_IR",
             "Finnish (Finland)": "fi_FI",
-            "Filipino (Philippines)": "fil_PH",
+            "Filipino (Tagalog)": "fil_PH",
             "French (Canada)": "fr_CA",
             "French (France)": "fr_FR",
             "Gujarati (India)": "gu_IN",
@@ -264,8 +264,8 @@ public class TranslationService {
             "Ukrainian (Ukraine)": "uk_UA",
             "Urdu (Pakistan)": "ur_PK",
             "Vietnamese (Vietnam)": "vi_VN",
-            "Mandarin (China)": "zh_CN",
-            "Mandarin (Taiwan)": "zh_TW",
+            "Chinese (Simplified)": "zh_CN",
+            "Chinese (Traditional)": "zh_TW",
             "Zulu (South Africa)": "zu_ZA",
             "English": "en"
         ]
