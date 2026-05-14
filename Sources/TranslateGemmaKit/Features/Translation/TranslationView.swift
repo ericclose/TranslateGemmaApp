@@ -100,7 +100,6 @@ public struct TranslationView: View {
                     Text("TranslateGemma")
                         .font(.system(size: 13, weight: .black, design: .rounded))
                         .foregroundColor(currentAccentColor)
-                        .padding(.top, -12)
 
                     ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
                     
@@ -111,7 +110,7 @@ public struct TranslationView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 35)
+                .padding(.top, 12)
                 .padding(.bottom, 15)
                 .overlay(alignment: .topTrailing) {
                     Button(action: { showModelDashboard = true }) {
@@ -127,7 +126,7 @@ public struct TranslationView: View {
                     }
                     .buttonStyle(.plain)
                     .padding(.trailing, 40)
-                    .padding(.top, 35)
+                    .padding(.top, 12)
                 }
                 .background(
                     TitleBarView()
@@ -171,6 +170,7 @@ public struct TranslationView: View {
                 .padding(.bottom, 40)
             }
         }
+        .ignoresSafeArea(edges: .top)
         .background(
             ZStack {
                 LiquidBackground(accentColor: currentAccentColor)
