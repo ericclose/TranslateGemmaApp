@@ -96,12 +96,11 @@ public struct TranslationView: View {
             // Content
             VStack(spacing: 0) {
                 // Top Mode Switcher & Language Selector
-                VStack(spacing: 24) {
-                    Text("TRANSLATEGEMMA")
-                        .font(.system(size: 10, weight: .black, design: .rounded))
-                        .foregroundColor(.secondary.opacity(0.5))
-                        .kerning(2.0)
-                        .padding(.top, -10)
+                VStack(spacing: 12) {
+                    Text("TranslateGemma")
+                        .font(.system(size: 13, weight: .black, design: .rounded))
+                        .foregroundColor(currentAccentColor)
+                        .padding(.top, -12)
 
                     ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
                     
@@ -112,8 +111,24 @@ public struct TranslationView: View {
                     }
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.top, 45)
-                .padding(.bottom, 30)
+                .padding(.top, 35)
+                .padding(.bottom, 15)
+                .overlay(alignment: .topTrailing) {
+                    Button(action: { showModelDashboard = true }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "cpu")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(currentAccentColor)
+                            Text("Model Library")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                        }
+                        .padding(.horizontal, 12).padding(.vertical, 7)
+                        .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5) })
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.trailing, 40)
+                    .padding(.top, 35)
+                }
                 .background(
                     TitleBarView()
                         .frame(height: 120) // Covers the entire header area
