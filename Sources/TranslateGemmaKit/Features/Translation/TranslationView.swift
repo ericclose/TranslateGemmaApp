@@ -76,11 +76,17 @@ public struct TranslationView: View {
 
                     ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
                     
-                    HStack(spacing: 12) {
+                    HStack(spacing: 0) {
                         sourceHeader
+                            .frame(maxWidth: .infinity)
+                        
                         swapButton
+                            .padding(.horizontal, 16)
+                        
                         targetHeader
+                            .frame(maxWidth: .infinity)
                     }
+                    .frame(width: 440)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.top, 12)
@@ -365,12 +371,15 @@ public struct TranslationView: View {
                 
                 Text(sourceLanguage == "Auto" ? (detectedSourceLanguage != nil ? "Auto: \(detectedSourceLanguage!)" : "Auto Detect") : sourceLanguage)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .lineLimit(1)
                 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
             .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5) })
         }
         .buttonStyle(.plain)
@@ -389,12 +398,15 @@ public struct TranslationView: View {
                 
                 Text(targetLanguage)
                     .font(.system(size: 12, weight: .bold, design: .rounded))
+                    .lineLimit(1)
                 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
             }
-            .padding(.horizontal, 12).padding(.vertical, 7)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 7)
+            .padding(.horizontal, 12)
             .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5) })
         }
         .buttonStyle(.plain)
