@@ -37,6 +37,7 @@ public struct TranslationView: View {
     @State private var showTargetLanguagePicker = false
     @State private var languageSearchText = ""
     @State private var isDraggingOver = false
+    @State private var currentTranslationTask: Task<Void, Never>? = nil
 
     let languages = [
         "Arabic (Egypt)", "Arabic (Saudi Arabia)", "Bulgarian (Bulgaria)", "Bengali (Bangladesh)",
@@ -210,7 +211,22 @@ public struct TranslationView: View {
         }
         .onChange(of: inputText) { _, newValue in
             translationService.recordActivity()
-            if newValue.isEmpty { outputText = "" }
+            if newValue.isEmpty { 
+                currentTranslationTask?.cancel()
+                currentTranslationTask = nil
+                outputText = "" 
+            } else if sourceLanguage == "Auto", let detected = detectedSourceLanguage {
+                // If detected language matches target, switch target to avoid redundant translation
+                if detected == targetLanguage {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        if detected == "English" {
+                            targetLanguage = "Chinese (Simplified)"
+                        } else {
+                            targetLanguage = "English"
+                        }
+                    }
+                }
+            }
         }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -406,8 +422,10 @@ public struct TranslationView: View {
                 .foregroundColor(currentAccentColor)
                 .frame(width: 24, height: 24)
                 .background(Circle().fill(.ultraThinMaterial))
+                .opacity(translationService.isTranslating ? 0.5 : 1.0)
         }
         .buttonStyle(.plain)
+        .disabled(translationService.isTranslating)
     }
 
     @ViewBuilder
@@ -504,18 +522,26 @@ public struct TranslationView: View {
     
     private func translateAction() {
         guard !selectedModelId.isEmpty else { showModelDashboard = true; return }
-        Task {
+        currentTranslationTask?.cancel()
+        currentTranslationTask = Task {
             do {
                 try await translationService.loadModel(modelId: selectedModelId)
                 let sourceLang = sourceLanguage == "Auto" ? nil : sourceLanguage
                 outputText = ""
                 _ = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
-                    outputText += chunk
+                    if !Task.isCancelled {
+                        outputText += chunk
+                    }
                 }
+            } catch is CancellationError {
+                // Ignore cancellation
             } catch {
-                errorMessage = error.localizedDescription
-                showErrorAlert = true
+                if !Task.isCancelled {
+                    errorMessage = error.localizedDescription
+                    showErrorAlert = true
+                }
             }
+            currentTranslationTask = nil
         }
     }
     
@@ -532,9 +558,19 @@ public struct TranslationView: View {
     }
     
     private func swapLanguages() {
+        let detected = detectedSourceLanguage ?? "English"
+        let oldSource = sourceLanguage
         let oldTarget = targetLanguage
-        targetLanguage = sourceLanguage == "Auto" ? "English" : sourceLanguage
-        sourceLanguage = oldTarget
+        
+        if oldSource == "Auto" {
+            // From Auto -> Target, swap to Target -> Detected
+            sourceLanguage = oldTarget
+            targetLanguage = detected
+        } else {
+            sourceLanguage = oldTarget
+            targetLanguage = oldSource
+        }
+        
         if !outputText.isEmpty {
             inputText = outputText
             outputText = ""

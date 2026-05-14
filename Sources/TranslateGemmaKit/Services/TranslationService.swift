@@ -195,6 +195,7 @@ public class TranslationService {
         }.value
         
         for try await generation in stream {
+            try Task.checkCancellation()
             if case .chunk(let text) = generation {
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                 if stopSequences.contains(where: { text.contains($0) }) { break }
