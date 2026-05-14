@@ -482,12 +482,18 @@ public struct TranslationView: View {
             do {
                 try await translationService.loadModel(modelId: selectedModelId)
                 let sourceLang = sourceLanguage == "Auto" ? nil : sourceLanguage
+                outputText = "" // Clear before starting
+                
                 if let fileURL = importedFileURL {
                     outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
-                        try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLanguage)
+                        try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
+                            outputText += chunk
+                        }
                     }
                 } else {
-                    outputText = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage)
+                    _ = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
+                        outputText += chunk
+                    }
                 }
             } catch {
                 errorMessage = error.localizedDescription

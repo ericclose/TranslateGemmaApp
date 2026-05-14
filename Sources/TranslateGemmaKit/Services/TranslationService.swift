@@ -120,7 +120,7 @@ public class TranslationService {
         }.value
     }
     
-    public func translate(text: String, sourceLang: String?, targetLang: String) async throws -> String {
+    public func translate(text: String, sourceLang: String?, targetLang: String, onChunk: ((String) -> Void)? = nil) async throws -> String {
         recordActivity()
         self.isTranslating = true
         
@@ -199,6 +199,7 @@ public class TranslationService {
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                 if stopSequences.contains(where: { text.contains($0) }) { break }
                 outputText += text
+                onChunk?(text)
                 // Increased limit for output text to match higher maxTokens
                 if outputText.count > 20000 { break }
             }
