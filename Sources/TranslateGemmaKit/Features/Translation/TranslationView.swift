@@ -5,25 +5,39 @@ import os
 
 private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
 
+enum TranslationMode: String, CaseIterable {
+    case text = "Text Translation"
+    case file = "File Processing"
+}
+
 public struct TranslationView: View {
     @Environment(ModelManager.self) private var modelManager
     @Environment(TranslationService.self) private var translationService
-    private let translationController = TranslationController()
+    @State private var translationController = TranslationController()
     
     @AppStorage("selectedModelId") private var selectedModelId: String = ""
     
+    // Mode State
+    @State private var mode: TranslationMode = .text
+    
+    // Text Mode State
     @State private var inputText: String = ""
     @State private var outputText: String = ""
     @State private var sourceLanguage: String = "Auto"
     @State private var targetLanguage: String = "English"
+    
+    // UI State
     @State private var showModelDashboard = false
     @State private var importedFileURL: URL? = nil
     @State private var errorMessage: String? = nil
     @State private var showErrorAlert = false
-    
     @State private var isHoveringSource = false
     @State private var isHoveringTarget = false
-    
+    @State private var showSourceLanguagePicker = false
+    @State private var showTargetLanguagePicker = false
+    @State private var languageSearchText = ""
+    @State private var isDraggingOver = false
+
     let languages = [
         "Arabic (Egypt)", "Arabic (Saudi Arabia)", "Bulgarian (Bulgaria)", "Bengali (Bangladesh)",
         "Bengali (India)", "Catalan (Spain)", "Czech (Czechia)", "Danish (Denmark)",
@@ -56,10 +70,8 @@ public struct TranslationView: View {
         if let size = parts.first(where: { $0.hasSuffix("b") }) {
             return "TranslateGemma \(size.uppercased())"
         }
-    return model.name
+        return model.name
     }
-    
-    // MARK: - Subviews
     
     private var detectedSourceLanguage: String? {
         guard !inputText.isEmpty else { return nil }
@@ -67,7 +79,6 @@ public struct TranslationView: View {
         recognizer.processString(inputText)
         guard let languageCode = recognizer.dominantLanguage?.rawValue else { return nil }
         
-        // Map common detection codes to our specific language list names
         if languageCode == "zh-Hant" { return "Chinese (Traditional)" }
         if languageCode.hasPrefix("zh") { return "Chinese (Simplified)" }
         if languageCode.hasPrefix("en") { return "English" }
@@ -85,129 +96,283 @@ public struct TranslationView: View {
         }
         return base
     }
+
+    // MARK: - Main Body
     
-    @ViewBuilder
-    private func languagePicker(selectedLanguage: Binding<String>, isPresented: Binding<Bool>, includeAuto: Bool) -> some View {
-        VStack(spacing: 0) {
-            // Search Field
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(.secondary)
-                TextField("Search language...", text: $languageSearchText)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 12, design: .rounded))
-                if !languageSearchText.isEmpty {
-                    Button(action: { languageSearchText = "" }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(Color.black.opacity(0.05))
-            
-            Divider().opacity(0.5)
-            
-            ScrollView {
-                VStack(alignment: .center, spacing: 1) {
-                    let displayLanguages = filteredLanguages(includeAuto: includeAuto)
-                    
-                    if displayLanguages.isEmpty {
-                        Text("No results")
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.vertical, 20)
-                    } else {
-                        ForEach(displayLanguages, id: \.self) { lang in
-                            LanguageRow(
-                                lang: lang,
-                                isSelected: selectedLanguage.wrappedValue == lang,
-                                accentColor: currentAccentColor
-                            ) {
-                                selectedLanguage.wrappedValue = lang
-                                isPresented.wrappedValue = false
-                                languageSearchText = ""
-                            }
+    public var body: some View {
+        GeometryReader { geometry in
+            ZStack {
+                LiquidBackground(accentColor: currentAccentColor)
+                VisualEffectView(material: .sidebar, blendingMode: .withinWindow).ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    // Top Mode Switcher & Language Selector
+                    VStack(spacing: 20) {
+                        ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
+                        
+                        HStack(spacing: 12) {
+                            sourceHeader
+                            swapButton
+                            targetHeader
                         }
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.top, 40)
+                    .padding(.bottom, 30)
+                    
+                    if mode == .text {
+                        textTranslationView(geometry: geometry)
+                            .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+                    } else {
+                        fileProcessingView(geometry: geometry)
+                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
+                    }
+                    
+                    Spacer()
+                    
+                    // Bottom Section with Status Bar and Translate Button
+                    ZStack(alignment: .bottom) {
+                        HStack {
+                            SystemStatusBar()
+                                .padding(.leading, 40)
+                            Spacer()
+                        }
+                        
+                        HStack {
+                            if mode == .text {
+                                translateButton
+                            } else if !translationController.tasks.isEmpty {
+                                startBatchButton
+                            }
+                        }
+                        .padding(.bottom, 10)
+                    }
+                    .padding(.top, 40)
+                    .padding(.bottom, 40)
                 }
-                .padding(4)
+                
             }
-            .scrollIndicators(.hidden)
-            .background(Color.clear)
+            .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
+                Task {
+                    var urls: [URL] = []
+                    for provider in providers {
+                        if let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil),
+                           let data = item as? Data,
+                           let url = URL(dataRepresentation: data, relativeTo: nil) {
+                            urls.append(url)
+                        }
+                    }
+                    if !urls.isEmpty {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            mode = .file
+                            translationController.addFiles(urls)
+                        }
+                        return true
+                    }
+                    return false
+                }
+                return true
+            }
+            .overlay(
+                Group {
+                    if isDraggingOver {
+                        ZStack {
+                            Color.black.opacity(0.2)
+                            RoundedRectangle(cornerRadius: 30)
+                                .strokeBorder(currentAccentColor, style: StrokeStyle(lineWidth: 4, dash: [10, 10]))
+                                .padding(40)
+                            
+                            VStack(spacing: 20) {
+                                Image(systemName: "doc.on.doc.fill")
+                                    .font(.system(size: 60))
+                                    .foregroundColor(currentAccentColor)
+                                Text("Drop files to process...")
+                                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .background(.ultraThinMaterial)
+                        .ignoresSafeArea()
+                    }
+                }
+            )
         }
-        .frame(width: 200, height: 350)
+        .frame(minWidth: 1000, minHeight: 700)
+        .sheet(isPresented: $showModelDashboard) {
+            ModelDashboardView(selectedModelId: $selectedModelId)
+                .environment(modelManager)
+        }
+        .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
+            Button("OK") { errorMessage = nil }
+        } message: { message in Text(message) }
+        .onAppear {
+            initializeModel()
+        }
+        .onChange(of: inputText) { _, newValue in
+            translationService.recordActivity()
+            if newValue.isEmpty { outputText = "" }
+        }
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(action: { showModelDashboard = true }) { Label("Models", systemImage: "cpu") }
+            }
+            ToolbarItem(placement: .status) {
+                HStack(spacing: 6) {
+                    Circle().fill(LinearGradient(colors: [.green, .green.opacity(0.6)], startPoint: .top, endPoint: .bottom)).frame(width: 6, height: 6)
+                    Text(formattedModelName).font(.system(size: 12, weight: .bold, design: .rounded))
+                }
+                .padding(.horizontal, 12).padding(.vertical, 6)
+                .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5) })
+            }
+        }
     }
+    
+    // MARK: - Layout Views
+    
+    @ViewBuilder
+    private func textTranslationView(geometry: GeometryProxy) -> some View {
+        AdaptiveLayout(width: geometry.size.width) {
+            TranslationCard(
+                title: { sourceActions },
+                text: $inputText,
+                isReadOnly: false,
+                placeholder: "Type or drop text here...",
+                containerWidth: geometry.size.width,
+                isHovered: isHoveringSource,
+                actions: { EmptyView() }
+            )
+            .onHover { isHoveringSource = $0 }
+            
+            TranslationCard(
+                title: { EmptyView() },
+                text: .constant(outputText),
+                isReadOnly: true,
+                placeholder: "Translation will appear here",
+                textColor: currentAccentColor,
+                containerWidth: geometry.size.width,
+                isHovered: isHoveringTarget,
+                actions: { targetActions }
+            )
+            .onHover { isHoveringTarget = $0 }
+        }
+        .padding(.horizontal, 40)
+    }
+    
+    @ViewBuilder
+    private func fileProcessingView(geometry: GeometryProxy) -> some View {
+        VStack(spacing: 24) {
+            if translationController.tasks.isEmpty {
+                dropZone
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Text("Task Queue")
+                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                        Spacer()
+                        Button(action: { withAnimation { translationController.clearTasks() } }) {
+                            Text("Clear All").font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(.secondary)
+                    }
+                    .padding(.horizontal, 10)
+                    
+                    ScrollView {
+                        VStack(spacing: 12) {
+                            ForEach(translationController.tasks) { task in
+                                TaskCard(task: task, accentColor: currentAccentColor) {
+                                    translationController.removeTask(task)
+                                }
+                            }
+                        }
+                        .padding(4)
+                    }
+                    
+                    HStack {
+                        Image(systemName: "info.circle")
+                        Text("Results will be saved as `filename.\(getLangCode(targetLanguage)).ext` in the same directory.")
+                            .font(.system(size: 11))
+                    }
+                    .foregroundColor(.secondary)
+                    .padding(.top, 8)
+                }
+                .padding(30)
+                .background(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(.ultraThinMaterial)
+                        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                )
+            }
+        }
+        .frame(maxWidth: 800)
+        .padding(.horizontal, 40)
+    }
+    
+    @ViewBuilder
+    private var dropZone: some View {
+        VStack(spacing: 24) {
+            ZStack {
+                Circle()
+                    .fill(currentAccentColor.opacity(0.1))
+                    .frame(width: 120, height: 120)
+                
+                Image(systemName: "doc.on.doc")
+                    .font(.system(size: 48))
+                    .foregroundColor(currentAccentColor)
+            }
+            
+            VStack(spacing: 8) {
+                Text("Drop Subtitle or Markdown Files")
+                    .font(.system(size: 20, weight: .bold, design: .rounded))
+                Text("Supports SRT, VTT, ASS, and Markdown")
+                    .font(.system(size: 14))
+                    .foregroundColor(.secondary)
+            }
+            
+            Button(action: importBatchFiles) {
+                Text("Browse Files")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .padding(.horizontal, 24)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(currentAccentColor))
+                    .foregroundColor(.white)
+            }
+            .buttonStyle(.plain)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(height: 400)
+        .background(
+            RoundedRectangle(cornerRadius: 32)
+                .strokeBorder(currentAccentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8, 8]))
+                .background(RoundedRectangle(cornerRadius: 32).fill(currentAccentColor.opacity(0.02)))
+        )
+    }
+
+    // MARK: - Helper Subviews
     
     @ViewBuilder
     private var sourceHeader: some View {
-        HStack(spacing: 8) {
-            Button(action: { showSourceLanguagePicker.toggle() }) {
-                HStack(spacing: 6) {
-                    Image(systemName: sourceLanguage == "Auto" ? "sparkles" : "character.bubble.fill")
-                        .font(.system(size: 10))
-                        .foregroundColor(currentAccentColor)
-                    
-                    Text(sourceLanguage == "Auto" ? (detectedSourceLanguage != nil ? "Auto: \(detectedSourceLanguage!)" : "Auto Detect") : sourceLanguage)
-                        .font(.system(size: 12, weight: .bold, design: .rounded))
-                    
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
-                        .foregroundColor(.secondary)
-                }
-                .frame(minWidth: 120)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 7)
-                .background(
-                    ZStack {
-                        Capsule()
-                            .fill(.ultraThinMaterial)
-                        Capsule()
-                            .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
-                    }
-                )
-                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-            }
-            .buttonStyle(.plain)
-            .popover(isPresented: $showSourceLanguagePicker, arrowEdge: .top) {
-                languagePicker(selectedLanguage: $sourceLanguage, isPresented: $showSourceLanguagePicker, includeAuto: true)
-            }
-            
-            if let fileURL = importedFileURL {
-                Text(fileURL.lastPathComponent)
-                    .font(.system(size: 11, weight: .medium, design: .rounded))
+        Button(action: { showSourceLanguagePicker.toggle() }) {
+            HStack(spacing: 6) {
+                Image(systemName: sourceLanguage == "Auto" ? "sparkles" : "character.bubble.fill")
+                    .font(.system(size: 10))
+                    .foregroundColor(currentAccentColor)
+                
+                Text(sourceLanguage == "Auto" ? (detectedSourceLanguage != nil ? "Auto: \(detectedSourceLanguage!)" : "Auto Detect") : sourceLanguage)
+                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
-                    .lineLimit(1)
             }
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5) })
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showSourceLanguagePicker) {
+            languagePicker(selectedLanguage: $sourceLanguage, isPresented: $showSourceLanguagePicker, includeAuto: true)
         }
     }
-    
-    @ViewBuilder
-    private var sourceActions: some View {
-        HStack(spacing: 8) {
-            Button(action: importFile) { Image(systemName: "doc.badge.plus") }
-                .buttonStyle(OrnamentButtonStyle())
-                .help("Import File (⌘I)")
-            
-            if !inputText.isEmpty {
-                Button(action: { withAnimation { inputText = ""; importedFileURL = nil } }) {
-                    Image(systemName: "xmark.circle.fill").symbolRenderingMode(.hierarchical)
-                }
-                .buttonStyle(OrnamentButtonStyle())
-            }
-        }
-    }
-    
-    @State private var showSourceLanguagePicker = false
-    @State private var showTargetLanguagePicker = false
-    @State private var languageSearchText = ""
-    
-
     
     @ViewBuilder
     private var targetHeader: some View {
@@ -224,57 +389,27 @@ public struct TranslationView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
             }
-            .frame(minWidth: 120)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                ZStack {
-                    Capsule()
-                        .fill(.ultraThinMaterial)
-                    Capsule()
-                        .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
-                }
-            )
-            .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            .padding(.horizontal, 12).padding(.vertical, 7)
+            .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.15), lineWidth: 0.5) })
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $showTargetLanguagePicker, arrowEdge: .top) {
+        .popover(isPresented: $showTargetLanguagePicker) {
             languagePicker(selectedLanguage: $targetLanguage, isPresented: $showTargetLanguagePicker, includeAuto: false)
         }
     }
-
     
     @ViewBuilder
-    private var targetActions: some View {
-        HStack(spacing: 8) {
-            Button(action: copyToClipboard) { Image(systemName: "doc.on.doc") }
-                .buttonStyle(OrnamentButtonStyle())
-                .disabled(outputText.isEmpty)
-                .help("Copy (⌘C)")
-            
-            Button(action: exportFile) { Image(systemName: "square.and.arrow.up") }
-                .buttonStyle(OrnamentButtonStyle())
-                .disabled(outputText.isEmpty)
-                .help("Export (⌘E)")
-        }
-    }
-    
     private var swapButton: some View {
         Button(action: swapLanguages) {
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 32, height: 32)
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                
-                Image(systemName: "arrow.left.and.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(currentAccentColor)
-            }
+            Image(systemName: "arrow.left.and.right")
+                .font(.system(size: 10, weight: .bold))
+                .foregroundColor(currentAccentColor)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(.ultraThinMaterial))
         }
         .buttonStyle(.plain)
     }
-    
+
     @ViewBuilder
     private var translateButton: some View {
         Button(action: translateAction) {
@@ -284,216 +419,98 @@ public struct TranslationView: View {
                 } else {
                     Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
                 }
-                Text("Translate").font(.system(size: 18, weight: .bold, design: .rounded))
+                Text("Translate Now").font(.system(size: 18, weight: .bold, design: .rounded))
             }
             .frame(width: 220, height: 56)
-            .background(
-                Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : [currentAccentColor, currentAccentColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                    .shadow(color: currentAccentColor.opacity(inputText.isEmpty ? 0 : 0.4), radius: 15, x: 0, y: 8)
-            )
+            .background(Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : [currentAccentColor, currentAccentColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)))
             .foregroundColor(inputText.isEmpty ? .secondary : .white)
+            .shadow(color: currentAccentColor.opacity(inputText.isEmpty ? 0 : 0.3), radius: 15, x: 0, y: 8)
         }
         .buttonStyle(.plain)
         .disabled(inputText.isEmpty || translationService.isTranslating)
-        .keyboardShortcut(.return, modifiers: .command)
     }
     
-    public var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                LiquidBackground(accentColor: currentAccentColor)
-                VisualEffectView(material: .sidebar, blendingMode: .withinWindow).ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    Spacer()
-                    
-                    AdaptiveLayout(width: geometry.size.width) {
-                        TranslationCard(
-                            title: { sourceActions },
-                            text: $inputText,
-                            isReadOnly: false,
-                            placeholder: "Type or drop text here...",
-                            containerWidth: geometry.size.width,
-                            isHovered: isHoveringSource,
-                            actions: { sourceHeader }
-                        )
-                        .onHover { isHoveringSource = $0 }
-                        .dropDestination(for: URL.self) { items, _ in
-                            if let url = items.first {
-                                self.importedFileURL = url
-                                self.inputText = (try? String(contentsOf: url)) ?? ""
-                                return true
-                            }
-                            return false
-                        }
-                        
-                        swapButton
-                            .zIndex(1) // Ensure it's above card shadows if they overlap
-                        
-                        TranslationCard(
-                            title: { targetHeader },
-                            text: .constant(outputText),
-                            isReadOnly: true,
-                            placeholder: "Translation will appear here",
-                            textColor: .blue,
-                            containerWidth: geometry.size.width,
-                            isHovered: isHoveringTarget,
-                            actions: { targetActions }
-                        )
-                        .onHover { isHoveringTarget = $0 }
-                    }
-                    .padding(.horizontal, 40).padding(.bottom, 30) // Adjusted padding
-                    
-                    Spacer()
-                    
-                    HStack(spacing: 20) {
-                        translateButton
-                    }
-                    .padding(.bottom, 50)
-                }
-                
-                // System Status Bar in bottom-left
-                VStack {
-                    Spacer()
-                    HStack {
-                        SystemStatusBar()
-                            .padding(.leading, 40)
-                            .padding(.bottom, 25) // Slightly adjusted for optical balance
-                        Spacer()
-                    }
-                }
-            }
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
-                    Button(action: { showModelDashboard = true }) { Label("Models", systemImage: "cpu") }
-                        .help("Model Management")
-                }
-                ToolbarItem(placement: .status) {
-                    HStack(spacing: 6) {
-                        Circle().fill(LinearGradient(colors: [.green, .green.opacity(0.6)], startPoint: .top, endPoint: .bottom)).frame(width: 6, height: 6)
-                        Text(formattedModelName).font(.system(size: 12, weight: .bold, design: .rounded))
-                    }
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5) })
-                }
-            }
-        }
-        .frame(minWidth: 900, minHeight: 650)
-        .sheet(isPresented: $showModelDashboard) {
-            ModelDashboardView(selectedModelId: $selectedModelId)
-                .environment(modelManager)
-        }
-        .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
-            Button("OK") { errorMessage = nil }
-        } message: { message in Text(message) }
-        .onAppear {
-            Task {
-                await modelManager.fetchCollectionModels()
-                let downloaded = modelManager.models.filter { $0.isDownloaded }
-                
-                if downloaded.isEmpty {
-                    // Scenario: No models locally, show dashboard and clear selection
-                    selectedModelId = ""
-                    showModelDashboard = true
-                } else if downloaded.count == 1 {
-                    // Scenario: Exactly one model available, auto-activate it
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        selectedModelId = downloaded[0].id
-                    }
+    @ViewBuilder
+    private var startBatchButton: some View {
+        Button(action: startBatchAction) {
+            HStack(spacing: 12) {
+                if translationController.isBatchProcessing {
+                    ProgressView().controlSize(.small).tint(.white)
                 } else {
-                    // Scenario: Multiple models exist, validate that current selection is still available
-                    if !selectedModelId.isEmpty && !downloaded.contains(where: { $0.id == selectedModelId }) {
-                        selectedModelId = ""
-                    }
+                    Image(systemName: "play.fill").font(.system(size: 18))
                 }
+                Text("Start Processing").font(.system(size: 18, weight: .bold, design: .rounded))
             }
+            .frame(width: 240, height: 56)
+            .background(Capsule().fill(currentAccentColor))
+            .foregroundColor(.white)
+            .shadow(color: currentAccentColor.opacity(0.3), radius: 15, x: 0, y: 8)
         }
-        .onChange(of: inputText) { _, newValue in
-            translationService.recordActivity()
-            if newValue.isEmpty {
-                outputText = ""
-            } else if sourceLanguage == "Auto" && detectedSourceLanguage == "English" && targetLanguage == "English" {
-                targetLanguage = "Chinese (Simplified)"
-            }
-        }
-        .onChange(of: sourceLanguage) { _, newValue in
-            if newValue == "English" && targetLanguage == "English" {
-                targetLanguage = "Chinese (Simplified)"
+        .buttonStyle(.plain)
+        .disabled(translationController.isBatchProcessing)
+    }
+
+    @ViewBuilder
+    private var sourceActions: some View {
+        HStack(spacing: 8) {
+            if !inputText.isEmpty {
+                Button(action: { withAnimation { inputText = ""; outputText = "" } }) {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(OrnamentButtonStyle())
             }
         }
     }
     
-    func importFile() {
+    @ViewBuilder
+    private var targetActions: some View {
+        HStack(spacing: 8) {
+            Button(action: copyToClipboard) { Image(systemName: "doc.on.doc") }
+                .buttonStyle(OrnamentButtonStyle())
+                .disabled(outputText.isEmpty)
+        }
+    }
+
+    // MARK: - Actions
+    
+    private func initializeModel() {
+        Task {
+            await modelManager.fetchCollectionModels()
+            let downloaded = modelManager.models.filter { $0.isDownloaded }
+            if downloaded.isEmpty {
+                showModelDashboard = true
+            } else if downloaded.count == 1 {
+                selectedModelId = downloaded[0].id
+            }
+        }
+    }
+    
+    private func importSingleFile() {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
         if panel.runModal() == .OK, let url = panel.url {
-            importedFileURL = url
             inputText = (try? String(contentsOf: url)) ?? ""
         }
     }
     
-    func exportFile() {
-        let panel = NSSavePanel()
-        panel.nameFieldStringValue = importedFileURL != nil ? "translated_" + importedFileURL!.lastPathComponent : "translated.txt"
-        if panel.runModal() == .OK, let url = panel.url {
-            try? outputText.write(to: url, atomically: true, encoding: .utf8)
+    private func importBatchFiles() {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
+        if panel.runModal() == .OK {
+            translationController.addFiles(panel.urls)
         }
     }
     
-    func copyToClipboard() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(outputText, forType: .string)
-    }
-    
-    func swapLanguages() {
-        // 1. Capture the current state before moving anything
-        let detected = detectedSourceLanguage ?? "English"
-        let oldSource = sourceLanguage
-        let oldTarget = targetLanguage
-        let oldOutput = outputText
-        
-        // 2. Perform text swap
-        if !oldOutput.isEmpty {
-            inputText = oldOutput
-            outputText = ""
-        }
-        
-        // 3. Perform language swap
-        if oldSource == "Auto" {
-            // From Auto -> Target, swap to Target -> Detected
-            sourceLanguage = oldTarget
-            targetLanguage = detected
-        } else {
-            sourceLanguage = oldTarget
-            targetLanguage = oldSource
-        }
-    }
-    
-    func translateAction() {
-        // Guidance: If no model is selected, open the Model Library
-        guard !selectedModelId.isEmpty else {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                showModelDashboard = true
-            }
-            return
-        }
-        
+    private func translateAction() {
+        guard !selectedModelId.isEmpty else { showModelDashboard = true; return }
         Task {
             do {
                 try await translationService.loadModel(modelId: selectedModelId)
                 let sourceLang = sourceLanguage == "Auto" ? nil : sourceLanguage
-                outputText = "" // Clear before starting
-                
-                if let fileURL = importedFileURL {
-                    outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
-                        try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
-                            outputText += chunk
-                        }
-                    }
-                } else {
-                    _ = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
-                        outputText += chunk
-                    }
+                outputText = ""
+                _ = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage) { chunk in
+                    outputText += chunk
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -501,7 +518,152 @@ public struct TranslationView: View {
             }
         }
     }
+    
+    private func startBatchAction() {
+        guard !selectedModelId.isEmpty else { showModelDashboard = true; return }
+        Task {
+            await translationController.runBatch(targetLang: targetLanguage, translationService: translationService, selectedModelId: selectedModelId)
+        }
+    }
+    
+    private func copyToClipboard() {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(outputText, forType: .string)
+    }
+    
+    private func swapLanguages() {
+        let oldTarget = targetLanguage
+        targetLanguage = sourceLanguage == "Auto" ? "English" : sourceLanguage
+        sourceLanguage = oldTarget
+        if !outputText.isEmpty {
+            inputText = outputText
+            outputText = ""
+        }
+    }
+    
+    private func getLangCode(_ name: String) -> String {
+        let mapping = ["Chinese (Simplified)": "zh", "Chinese (Traditional)": "zh-tw", "English": "en", "Japanese (Japan)": "ja", "Korean (South Korea)": "ko"]
+        return mapping[name] ?? name.prefix(2).lowercased()
+    }
+    
+    @ViewBuilder
+    private func languagePicker(selectedLanguage: Binding<String>, isPresented: Binding<Bool>, includeAuto: Bool) -> some View {
+        VStack(spacing: 0) {
+            HStack {
+                Image(systemName: "magnifyingglass").foregroundColor(.secondary)
+                TextField("Search...", text: $languageSearchText).textFieldStyle(.plain)
+            }
+            .padding(10).background(Color.black.opacity(0.05))
+            
+            ScrollView {
+                VStack(spacing: 1) {
+                    ForEach(filteredLanguages(includeAuto: includeAuto), id: \.self) { lang in
+                        LanguageRow(lang: lang, isSelected: selectedLanguage.wrappedValue == lang, accentColor: currentAccentColor) {
+                            selectedLanguage.wrappedValue = lang
+                            isPresented.wrappedValue = false
+                        }
+                    }
+                }
+                .padding(4)
+            }
+        }
+        .frame(width: 200, height: 300)
+    }
 }
+
+// MARK: - Components
+
+struct ModeSwitcher: View {
+    @Binding var selectedMode: TranslationMode
+    let accentColor: Color
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(TranslationMode.allCases, id: \.self) { mode in
+                Button(action: { withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) { selectedMode = mode } }) {
+                    Text(mode.rawValue)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 8)
+                        .background(
+                            ZStack {
+                                if selectedMode == mode {
+                                    Capsule()
+                                        .fill(accentColor)
+                                        .matchedGeometryEffect(id: "mode", in: modeNamespace)
+                                }
+                            }
+                        )
+                        .foregroundColor(selectedMode == mode ? .white : .secondary)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(4)
+        .background(Capsule().fill(.ultraThinMaterial))
+        .overlay(Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5))
+    }
+    
+    @Namespace private var modeNamespace
+}
+
+struct TaskCard: View {
+    let task: TranslationTask
+    let accentColor: Color
+    let onRemove: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 16) {
+            // File Icon
+            ZStack {
+                RoundedRectangle(cornerRadius: 12).fill(accentColor.opacity(0.1))
+                Image(systemName: "doc.text.fill").foregroundColor(accentColor).font(.system(size: 16))
+            }
+            .frame(width: 40, height: 40)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(task.fileName)
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                
+                HStack(spacing: 10) {
+                    Text(ByteCountFormatter().string(fromByteCount: task.fileSize))
+                    Circle().fill(.secondary).frame(width: 2, height: 2)
+                    Text(task.status.description)
+                }
+                .font(.system(size: 11))
+                .foregroundColor(.secondary)
+            }
+            
+            Spacer()
+            
+            if case .processing = task.status {
+                ProgressView(value: task.status.progress)
+                    .progressViewStyle(.linear)
+                    .frame(width: 100)
+                    .tint(accentColor)
+            } else if case .completed(let url) = task.status {
+                Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
+                    Image(systemName: "folder.fill")
+                        .foregroundColor(accentColor)
+                }
+                .buttonStyle(.plain)
+                .help("Show in Finder")
+            } else if case .failed = task.status {
+                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
+            }
+            
+            Button(action: onRemove) {
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundColor(.secondary.opacity(0.5))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.05)))
+    }
+}
+
 
 public struct AdaptiveLayout<Content: View>: View {
     let width: CGFloat
@@ -513,7 +675,7 @@ public struct AdaptiveLayout<Content: View>: View {
     }
     
     public var body: some View {
-        HStack(spacing: 12) { content }
+        HStack(spacing: 24) { content }
             .frame(maxWidth: min(width - 64, 1600))
     }
 }
