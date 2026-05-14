@@ -277,9 +277,10 @@ public class TranslationService {
         let recognizer = NLLanguageRecognizer()
         recognizer.processString(text)
         
-        // TranslateGemma specifically likes 'zh' for Chinese
+        // TranslateGemma specifically likes 'zh_CN' or 'zh_TW' for Chinese
         if let languageCode = recognizer.dominantLanguage?.rawValue {
-            if languageCode.hasPrefix("zh") { return "zh" }
+            if languageCode == "zh-Hant" { return "zh_TW" }
+            if languageCode.hasPrefix("zh") { return "zh_CN" }
             return languageCode
         }
         

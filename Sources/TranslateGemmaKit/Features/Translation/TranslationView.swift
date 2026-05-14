@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import NaturalLanguage
 import os
 
 private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
@@ -13,7 +14,8 @@ public struct TranslationView: View {
     
     @State private var inputText: String = ""
     @State private var outputText: String = ""
-    @State private var targetLanguage: String = "Chinese (Simplified)"
+    @State private var sourceLanguage: String = "Auto"
+    @State private var targetLanguage: String = "English"
     @State private var showModelDashboard = false
     @State private var importedFileURL: URL? = nil
     @State private var errorMessage: String? = nil
@@ -59,11 +61,130 @@ public struct TranslationView: View {
     
     // MARK: - Subviews
     
+    private var detectedSourceLanguage: String? {
+        guard !inputText.isEmpty else { return nil }
+        let recognizer = NLLanguageRecognizer()
+        recognizer.processString(inputText)
+        guard let languageCode = recognizer.dominantLanguage?.rawValue else { return nil }
+        
+        // Map common detection codes to our specific language list names
+        if languageCode == "zh-Hant" { return "Chinese (Traditional)" }
+        if languageCode.hasPrefix("zh") { return "Chinese (Simplified)" }
+        if languageCode.hasPrefix("en") { return "English" }
+        
+        let locale = Locale(identifier: "en")
+        return locale.localizedString(forLanguageCode: languageCode)?.capitalized
+    }
+
+    private func filteredLanguages(includeAuto: Bool) -> [String] {
+        let base = languages.filter {
+            languageSearchText.isEmpty || $0.lowercased().contains(languageSearchText.lowercased())
+        }
+        if includeAuto && (languageSearchText.isEmpty || "auto".contains(languageSearchText.lowercased())) {
+            return ["Auto"] + base
+        }
+        return base
+    }
+    
+    @ViewBuilder
+    private func languagePicker(selectedLanguage: Binding<String>, isPresented: Binding<Bool>, includeAuto: Bool) -> some View {
+        VStack(spacing: 0) {
+            // Search Field
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(.secondary)
+                TextField("Search language...", text: $languageSearchText)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 12, design: .rounded))
+                if !languageSearchText.isEmpty {
+                    Button(action: { languageSearchText = "" }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(Color.black.opacity(0.05))
+            
+            Divider().opacity(0.5)
+            
+            ScrollView {
+                VStack(alignment: .center, spacing: 1) {
+                    let displayLanguages = filteredLanguages(includeAuto: includeAuto)
+                    
+                    if displayLanguages.isEmpty {
+                        Text("No results")
+                            .font(.system(size: 11, weight: .medium, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(displayLanguages, id: \.self) { lang in
+                            LanguageRow(
+                                lang: lang,
+                                isSelected: selectedLanguage.wrappedValue == lang,
+                                accentColor: currentAccentColor
+                            ) {
+                                selectedLanguage.wrappedValue = lang
+                                isPresented.wrappedValue = false
+                                languageSearchText = ""
+                            }
+                        }
+                    }
+                }
+                .padding(4)
+            }
+            .scrollIndicators(.hidden)
+            .background(Color.clear)
+        }
+        .frame(width: 200, height: 350)
+    }
+    
     @ViewBuilder
     private var sourceHeader: some View {
-        Label(importedFileURL != nil ? importedFileURL!.lastPathComponent : "Auto Detect", systemImage: "text.justify.left")
-            .font(.system(size: 13, weight: .bold, design: .rounded))
-            .foregroundColor(.secondary)
+        HStack(spacing: 8) {
+            Button(action: { showSourceLanguagePicker.toggle() }) {
+                HStack(spacing: 6) {
+                    Image(systemName: sourceLanguage == "Auto" ? "sparkles" : "character.bubble.fill")
+                        .font(.system(size: 10))
+                        .foregroundColor(currentAccentColor)
+                    
+                    Text(sourceLanguage == "Auto" ? (detectedSourceLanguage != nil ? "Auto: \(detectedSourceLanguage!)" : "Auto Detect") : sourceLanguage)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                    
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 8, weight: .bold))
+                        .foregroundColor(.secondary)
+                }
+                .frame(minWidth: 120)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    ZStack {
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                        Capsule()
+                            .strokeBorder(.white.opacity(0.15), lineWidth: 0.5)
+                    }
+                )
+                .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+            }
+            .buttonStyle(.plain)
+            .popover(isPresented: $showSourceLanguagePicker, arrowEdge: .top) {
+                languagePicker(selectedLanguage: $sourceLanguage, isPresented: $showSourceLanguagePicker, includeAuto: true)
+            }
+            
+            if let fileURL = importedFileURL {
+                Text(fileURL.lastPathComponent)
+                    .font(.system(size: 11, weight: .medium, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+        }
     }
     
     @ViewBuilder
@@ -82,19 +203,15 @@ public struct TranslationView: View {
         }
     }
     
-    @State private var showLanguagePicker = false
+    @State private var showSourceLanguagePicker = false
+    @State private var showTargetLanguagePicker = false
     @State private var languageSearchText = ""
     
-    private var filteredLanguages: [String] {
-        if languageSearchText.isEmpty {
-            return languages
-        }
-        return languages.filter { $0.lowercased().contains(languageSearchText.lowercased()) }
-    }
+
     
     @ViewBuilder
     private var targetHeader: some View {
-        Button(action: { showLanguagePicker.toggle() }) {
+        Button(action: { showTargetLanguagePicker.toggle() }) {
             HStack(spacing: 6) {
                 Image(systemName: "character.bubble.fill")
                     .font(.system(size: 10))
@@ -107,6 +224,7 @@ public struct TranslationView: View {
                     .font(.system(size: 8, weight: .bold))
                     .foregroundColor(.secondary)
             }
+            .frame(minWidth: 120)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .background(
@@ -120,59 +238,8 @@ public struct TranslationView: View {
             .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
         }
         .buttonStyle(.plain)
-        .popover(isPresented: $showLanguagePicker, arrowEdge: .top) {
-            VStack(spacing: 0) {
-                // Search Field
-                HStack {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.secondary)
-                    TextField("Search language...", text: $languageSearchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 12, design: .rounded))
-                    if !languageSearchText.isEmpty {
-                        Button(action: { languageSearchText = "" }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 11))
-                                .foregroundColor(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-                .background(Color.black.opacity(0.05))
-                
-                Divider().opacity(0.5)
-                
-                ScrollView {
-                    VStack(alignment: .center, spacing: 1) {
-                        if filteredLanguages.isEmpty {
-                            Text("No results")
-                                .font(.system(size: 11, weight: .medium, design: .rounded))
-                                .foregroundColor(.secondary)
-                                .frame(maxWidth: .infinity, alignment: .center)
-                                .padding(.vertical, 20)
-                        } else {
-                            ForEach(filteredLanguages, id: \.self) { lang in
-                                LanguageRow(
-                                    lang: lang,
-                                    isSelected: targetLanguage == lang,
-                                    accentColor: currentAccentColor
-                                ) {
-                                    targetLanguage = lang
-                                    showLanguagePicker = false
-                                    languageSearchText = ""
-                                }
-                            }
-                        }
-                    }
-                    .padding(4)
-                }
-                .scrollIndicators(.hidden)
-                .background(Color.clear)
-            }
-            .frame(width: 200, height: 350)
+        .popover(isPresented: $showTargetLanguagePicker, arrowEdge: .top) {
+            languagePicker(selectedLanguage: $targetLanguage, isPresented: $showTargetLanguagePicker, includeAuto: false)
         }
     }
 
@@ -185,14 +252,27 @@ public struct TranslationView: View {
                 .disabled(outputText.isEmpty)
                 .help("Copy (⌘C)")
             
-            Button(action: swapLanguages) { Image(systemName: "arrow.left.and.right") }
-                .buttonStyle(OrnamentButtonStyle())
-            
             Button(action: exportFile) { Image(systemName: "square.and.arrow.up") }
                 .buttonStyle(OrnamentButtonStyle())
                 .disabled(outputText.isEmpty)
                 .help("Export (⌘E)")
         }
+    }
+    
+    private var swapButton: some View {
+        Button(action: swapLanguages) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 32, height: 32)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                
+                Image(systemName: "arrow.left.and.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(currentAccentColor)
+            }
+        }
+        .buttonStyle(.plain)
     }
     
     @ViewBuilder
@@ -229,13 +309,13 @@ public struct TranslationView: View {
                     
                     AdaptiveLayout(width: geometry.size.width) {
                         TranslationCard(
-                            title: { sourceHeader },
+                            title: { sourceActions },
                             text: $inputText,
                             isReadOnly: false,
                             placeholder: "Type or drop text here...",
                             containerWidth: geometry.size.width,
                             isHovered: isHoveringSource,
-                            actions: { sourceActions }
+                            actions: { sourceHeader }
                         )
                         .onHover { isHoveringSource = $0 }
                         .dropDestination(for: URL.self) { items, _ in
@@ -246,6 +326,9 @@ public struct TranslationView: View {
                             }
                             return false
                         }
+                        
+                        swapButton
+                            .zIndex(1) // Ensure it's above card shadows if they overlap
                         
                         TranslationCard(
                             title: { targetHeader },
@@ -325,8 +408,18 @@ public struct TranslationView: View {
                 }
             }
         }
-        .onChange(of: inputText) { _, _ in
+        .onChange(of: inputText) { _, newValue in
             translationService.recordActivity()
+            if newValue.isEmpty {
+                outputText = ""
+            } else if sourceLanguage == "Auto" && detectedSourceLanguage == "English" && targetLanguage == "English" {
+                targetLanguage = "Chinese (Simplified)"
+            }
+        }
+        .onChange(of: sourceLanguage) { _, newValue in
+            if newValue == "English" && targetLanguage == "English" {
+                targetLanguage = "Chinese (Simplified)"
+            }
         }
     }
     
@@ -353,7 +446,27 @@ public struct TranslationView: View {
     }
     
     func swapLanguages() {
-        targetLanguage = (targetLanguage == "English") ? "Chinese (Simplified)" : "English"
+        // 1. Capture the current state before moving anything
+        let detected = detectedSourceLanguage ?? "English"
+        let oldSource = sourceLanguage
+        let oldTarget = targetLanguage
+        let oldOutput = outputText
+        
+        // 2. Perform text swap
+        if !oldOutput.isEmpty {
+            inputText = oldOutput
+            outputText = ""
+        }
+        
+        // 3. Perform language swap
+        if oldSource == "Auto" {
+            // From Auto -> Target, swap to Target -> Detected
+            sourceLanguage = oldTarget
+            targetLanguage = detected
+        } else {
+            sourceLanguage = oldTarget
+            targetLanguage = oldSource
+        }
     }
     
     func translateAction() {
@@ -368,12 +481,13 @@ public struct TranslationView: View {
         Task {
             do {
                 try await translationService.loadModel(modelId: selectedModelId)
+                let sourceLang = sourceLanguage == "Auto" ? nil : sourceLanguage
                 if let fileURL = importedFileURL {
                     outputText = try await translationController.processFile(url: fileURL, targetLang: targetLanguage) { text in
-                        try await translationService.translate(text: text, sourceLang: nil, targetLang: targetLanguage)
+                        try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLanguage)
                     }
                 } else {
-                    outputText = try await translationService.translate(text: inputText, sourceLang: nil, targetLang: targetLanguage)
+                    outputText = try await translationService.translate(text: inputText, sourceLang: sourceLang, targetLang: targetLanguage)
                 }
             } catch {
                 errorMessage = error.localizedDescription
@@ -393,7 +507,7 @@ public struct AdaptiveLayout<Content: View>: View {
     }
     
     public var body: some View {
-        HStack(spacing: 24) { content }
+        HStack(spacing: 12) { content }
             .frame(maxWidth: min(width - 64, 1600))
     }
 }
