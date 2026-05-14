@@ -334,6 +334,7 @@ public struct TranslationView: View {
             }
         }
         .frame(maxWidth: 800)
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 40)
     }
     
@@ -726,6 +727,7 @@ public struct AdaptiveLayout<Content: View>: View {
     public var body: some View {
         HStack(spacing: 24) { content }
             .frame(maxWidth: min(width - 64, 1600))
+            .frame(maxWidth: .infinity)
     }
 }
 
