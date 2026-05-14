@@ -15,6 +15,5 @@ struct TranslateGemmaApp: App {
                 .environment(systemMonitor)
         }
         .windowStyle(.hiddenTitleBar)
-        .windowToolbarStyle(.unified)
     }
 }

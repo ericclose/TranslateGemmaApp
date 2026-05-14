@@ -65,15 +65,6 @@ public struct TranslationView: View {
         return .blue
     }
     
-    private var formattedModelName: String {
-        guard let model = modelManager.models.first(where: { $0.id == selectedModelId }) else { return "No Model" }
-        let parts = model.name.lowercased().components(separatedBy: "-")
-        if let size = parts.first(where: { $0.hasSuffix("b") }) {
-            return "TranslateGemma \(size.uppercased())"
-        }
-        return model.name
-    }
-    
     private var detectedSourceLanguage: String? {
         guard !inputText.isEmpty else { return nil }
         let recognizer = NLLanguageRecognizer()
@@ -101,104 +92,124 @@ public struct TranslationView: View {
     // MARK: - Main Body
     
     public var body: some View {
-        GeometryReader { geometry in
+        VStack(spacing: 0) {
+            // Content
+            VStack(spacing: 0) {
+                // Top Mode Switcher & Language Selector
+                VStack(spacing: 24) {
+                    Text("TRANSLATEGEMMA")
+                        .font(.system(size: 10, weight: .black, design: .rounded))
+                        .foregroundColor(.secondary.opacity(0.5))
+                        .kerning(2.0)
+                        .padding(.top, -10)
+
+                    ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
+                    
+                    HStack(spacing: 12) {
+                        sourceHeader
+                        swapButton
+                        targetHeader
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.top, 45)
+                .padding(.bottom, 30)
+                .background(
+                    TitleBarView()
+                        .frame(height: 120) // Covers the entire header area
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                        .ignoresSafeArea()
+                )
+                
+                if mode == .text {
+                    GeometryReader { geometry in
+                        textTranslationView(geometry: geometry)
+                    }
+                    .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
+                } else {
+                    GeometryReader { geometry in
+                        fileProcessingView(geometry: geometry)
+                    }
+                    .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
+                }
+                
+                Spacer()
+                
+                // Bottom Section with Status Bar and Translate Button
+                ZStack(alignment: .bottom) {
+                    HStack {
+                        SystemStatusBar()
+                            .padding(.leading, 40)
+                        Spacer()
+                    }
+                    
+                    HStack {
+                        if mode == .text {
+                            translateButton
+                        } else if !translationController.tasks.isEmpty {
+                            startBatchButton
+                        }
+                    }
+                    .padding(.bottom, 10)
+                }
+                .padding(.top, 40)
+                .padding(.bottom, 40)
+            }
+        }
+        .background(
             ZStack {
                 LiquidBackground(accentColor: currentAccentColor)
-                VisualEffectView(material: .sidebar, blendingMode: .withinWindow).ignoresSafeArea()
-                
-                VStack(spacing: 0) {
-                    // Top Mode Switcher & Language Selector
-                    VStack(spacing: 20) {
-                        ModeSwitcher(selectedMode: $mode, accentColor: currentAccentColor)
-                        
-                        HStack(spacing: 12) {
-                            sourceHeader
-                            swapButton
-                            targetHeader
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 40)
-                    .padding(.bottom, 30)
-                    
-                    if mode == .text {
-                        textTranslationView(geometry: geometry)
-                            .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
-                    } else {
-                        fileProcessingView(geometry: geometry)
-                            .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
-                    }
-                    
-                    Spacer()
-                    
-                    // Bottom Section with Status Bar and Translate Button
-                    ZStack(alignment: .bottom) {
-                        HStack {
-                            SystemStatusBar()
-                                .padding(.leading, 40)
-                            Spacer()
-                        }
-                        
-                        HStack {
-                            if mode == .text {
-                                translateButton
-                            } else if !translationController.tasks.isEmpty {
-                                startBatchButton
-                            }
-                        }
-                        .padding(.bottom, 10)
-                    }
-                    .padding(.top, 40)
-                    .padding(.bottom, 40)
-                }
-                
+                VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
+                    .ignoresSafeArea()
             }
-            .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
-                Task {
-                    var urls: [URL] = []
-                    for provider in providers {
-                        if let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil),
-                           let data = item as? Data,
-                           let url = URL(dataRepresentation: data, relativeTo: nil) {
-                            urls.append(url)
-                        }
-                    }
-                    if !urls.isEmpty {
-                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                            mode = .file
-                            translationController.addFiles(urls)
-                        }
-                        return true
-                    }
-                    return false
-                }
-                return true
-            }
-            .overlay(
-                Group {
-                    if isDraggingOver {
-                        ZStack {
-                            Color.black.opacity(0.2)
-                            RoundedRectangle(cornerRadius: 30)
-                                .strokeBorder(currentAccentColor, style: StrokeStyle(lineWidth: 4, dash: [10, 10]))
-                                .padding(40)
-                            
-                            VStack(spacing: 20) {
-                                Image(systemName: "doc.on.doc.fill")
-                                    .font(.system(size: 60))
-                                    .foregroundColor(currentAccentColor)
-                                Text("Drop files to process...")
-                                    .font(.system(size: 24, weight: .bold, design: .rounded))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .background(.ultraThinMaterial)
-                        .ignoresSafeArea()
-                    }
-                }
-            )
-        }
+            .allowsHitTesting(false)
+        )
         .frame(minWidth: 1000, minHeight: 700)
+        .navigationTitle("TranslateGemma")
+        .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
+            Task {
+                var urls: [URL] = []
+                for provider in providers {
+                    if let item = try? await provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil),
+                       let data = item as? Data,
+                       let url = URL(dataRepresentation: data, relativeTo: nil) {
+                        urls.append(url)
+                    }
+                }
+                if !urls.isEmpty {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        mode = .file
+                        translationController.addFiles(urls)
+                    }
+                    return true
+                }
+                return false
+            }
+            return true
+        }
+        .overlay(
+            Group {
+                if isDraggingOver {
+                    ZStack {
+                        Color.black.opacity(0.2)
+                        RoundedRectangle(cornerRadius: 30)
+                            .strokeBorder(currentAccentColor, style: StrokeStyle(lineWidth: 4, dash: [10, 10]))
+                            .padding(40)
+                        
+                        VStack(spacing: 20) {
+                            Image(systemName: "doc.on.doc.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(currentAccentColor)
+                            Text("Drop files to process...")
+                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .background(.ultraThinMaterial)
+                    .ignoresSafeArea()
+                }
+            }
+        )
         .sheet(isPresented: $showModelDashboard) {
             ModelDashboardView(selectedModelId: $selectedModelId)
                 .environment(modelManager)
@@ -226,19 +237,6 @@ public struct TranslationView: View {
                         }
                     }
                 }
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button(action: { showModelDashboard = true }) { Label("Models", systemImage: "cpu") }
-            }
-            ToolbarItem(placement: .status) {
-                HStack(spacing: 6) {
-                    Circle().fill(LinearGradient(colors: [.green, .green.opacity(0.6)], startPoint: .top, endPoint: .bottom)).frame(width: 6, height: 6)
-                    Text(formattedModelName).font(.system(size: 12, weight: .bold, design: .rounded))
-                }
-                .padding(.horizontal, 12).padding(.vertical, 6)
-                .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5) })
             }
         }
     }
