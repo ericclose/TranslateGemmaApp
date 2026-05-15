@@ -145,6 +145,91 @@ final class ParserTests: XCTestCase {
         XCTAssertTrue(hasThematicBreak)
     }
     
+    func testYAMLFrontmatterPreservation() {
+        let parser = MarkdownParser()
+        let markdown = """
+        ---
+        title: Hello
+        date: 2023-10-27
+        ---
+        # Header
+        """
+        
+        let chunks = parser.parseForTranslation(content: markdown)
+        
+        let texts = chunks.compactMap { chunk -> String? in
+            if case .text(let t) = chunk { return t }
+            return nil
+        }
+        
+        XCTAssertTrue(texts.contains("Header"))
+        XCTAssertFalse(texts.contains(where: { $0.contains("title") }))
+        XCTAssertFalse(texts.contains(where: { $0.contains("2023") }))
+        
+        // Ensure reassembled markdown contains exactly the YAML frontmatter
+        let reassembled = parser.assemble(chunks: chunks, translatedTexts: texts)
+        XCTAssertTrue(reassembled.hasPrefix("---\ntitle: Hello\ndate: 2023-10-27\n---\n"))
+    }
+    
+    func testHTMLTagPreservation() {
+        let parser = MarkdownParser()
+        let markdown = "Press <kbd>Ctrl</kbd> + <kbd>C</kbd> to copy. <br/>"
+        
+        let chunks = parser.parseForTranslation(content: markdown)
+        
+        let texts = chunks.compactMap { chunk -> String? in
+            if case .text(let t) = chunk { return t }
+            return nil
+        }
+        
+        XCTAssertTrue(texts.contains("Press "))
+        XCTAssertTrue(texts.contains("Ctrl"))
+        XCTAssertTrue(texts.contains(" + "))
+        XCTAssertTrue(texts.contains("C"))
+        XCTAssertTrue(texts.contains(" to copy. "))
+        
+        let syntaxChunks = chunks.compactMap { chunk -> String? in
+            if case .syntax(let s) = chunk { return s }
+            return nil
+        }
+        
+        XCTAssertTrue(syntaxChunks.contains("<kbd>"))
+        XCTAssertTrue(syntaxChunks.contains("</kbd>"))
+        XCTAssertTrue(syntaxChunks.contains("<br/>"))
+    }
+    
+    func testTablePreservation() {
+        let parser = MarkdownParser()
+        let markdown = """
+        | Header 1 | Header 2 |
+        | :--- | :---: |
+        | Row 1 | Row 2 |
+        """
+        
+        let chunks = parser.parseForTranslation(content: markdown)
+        
+        let texts = chunks.compactMap { chunk -> String? in
+            if case .text(let t) = chunk { return t }
+            return nil
+        }
+        
+        XCTAssertTrue(texts.contains("Header 1"))
+        XCTAssertTrue(texts.contains("Header 2"))
+        XCTAssertTrue(texts.contains("Row 1"))
+        XCTAssertTrue(texts.contains("Row 2"))
+        
+        // Make sure syntax formatting like alignment row is not translated
+        XCTAssertFalse(texts.contains(where: { $0.contains(":---") }))
+        
+        let reassembled = parser.assemble(chunks: chunks, translatedTexts: ["Header 1 Trans", "Header 2 Trans", "Row 1 Trans", "Row 2 Trans"])
+        let expected = """
+        | Header 1 Trans | Header 2 Trans |
+        | :--- | :---: |
+        | Row 1 Trans | Row 2 Trans |
+        """.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertEqual(reassembled, expected)
+    }
+    
     // MARK: - Performance Tests
     
     func testParserPerformance() {

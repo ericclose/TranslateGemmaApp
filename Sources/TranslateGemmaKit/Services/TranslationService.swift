@@ -139,6 +139,28 @@ public class TranslationService {
             throw NSError(domain: "TranslationService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Model not loaded"])
         }
         
+        let chunks = TextSplitter.split(text: text, maxChunkLength: 1500)
+        var fullOutput = ""
+        
+        for chunk in chunks {
+            try Task.checkCancellation()
+            
+            let chunkOutput = try await translateChunk(text: chunk.text, sourceLang: sourceLang, targetLang: targetLang, container: container, onChunk: onChunk)
+            fullOutput += chunkOutput + chunk.separator
+            
+            if !chunk.separator.isEmpty {
+                onChunk?(chunk.separator)
+            }
+        }
+        
+        return fullOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    private func translateChunk(text: String, sourceLang: String?, targetLang: String, container: ModelContainer, onChunk: ((String) -> Void)?) async throws -> String {
+        if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return text
+        }
+        
         let sCode: String
         if let explicitCode = getLanguageCode(sourceLang) {
             sCode = explicitCode
@@ -170,7 +192,6 @@ public class TranslationService {
         var outputText = ""
         
         // Performance Optimization: Use prefillStepSize to speed up initial prompt processing.
-        // Smaller steps for larger models (27b) and larger steps for smaller models (4b).
         let prefillStepSize: Int
         if let modelId = currentModelId {
             if modelId.contains("27b") {
@@ -185,7 +206,7 @@ public class TranslationService {
         }
         
         let parameters = GenerateParameters(
-            maxTokens: 2048, // Increased from 1024 to allow longer translations
+            maxTokens: 2048,
             repetitionPenalty: nil,
             prefillStepSize: prefillStepSize
         )
@@ -196,12 +217,11 @@ public class TranslationService {
         
         for try await generation in stream {
             try Task.checkCancellation()
-            if case .chunk(let text) = generation {
+            if case .chunk(let genText) = generation {
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
-                if stopSequences.contains(where: { text.contains($0) }) { break }
-                outputText += text
-                onChunk?(text)
-                // Increased limit for output text to match higher maxTokens
+                if stopSequences.contains(where: { genText.contains($0) }) { break }
+                outputText += genText
+                onChunk?(genText)
                 if outputText.count > 20000 { break }
             }
         }

@@ -3,7 +3,7 @@ import Foundation
 enum MarkdownChunk {
     case text(String)
     case code(String)
-    case syntax(String) // Headers, lists, blockquote markers, thematic breaks, etc.
+    case syntax(String) // Headers, lists, blockquote markers, thematic breaks, tables, HTML, YAML, etc.
 }
 
 class MarkdownParser {
@@ -13,20 +13,40 @@ class MarkdownParser {
         
         var inCodeBlock = false
         var codeBlockFence = ""
+        var inYamlFrontmatter = false
+        var hasSeenFirstLine = false
         
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
+            let suffix = i < lines.count - 1 ? "\n" : ""
+            
+            // 0. Handle YAML Frontmatter
+            if !hasSeenFirstLine && i == 0 && trimmed == "---" {
+                inYamlFrontmatter = true
+                hasSeenFirstLine = true
+                chunks.append(.syntax(line + suffix))
+                continue
+            }
+            hasSeenFirstLine = true
+            
+            if inYamlFrontmatter {
+                chunks.append(.syntax(line + suffix))
+                if trimmed == "---" {
+                    inYamlFrontmatter = false
+                }
+                continue
+            }
             
             // 1. Handle Fenced Code Blocks
             if !inCodeBlock && (trimmed.hasPrefix("```") || trimmed.hasPrefix("~~~")) {
                 inCodeBlock = true
                 codeBlockFence = String(trimmed.prefix(3))
-                chunks.append(.code(line + (i < lines.count - 1 ? "\n" : "")))
+                chunks.append(.code(line + suffix))
                 continue
             }
             
             if inCodeBlock {
-                chunks.append(.code(line + (i < lines.count - 1 ? "\n" : "")))
+                chunks.append(.code(line + suffix))
                 if trimmed.hasPrefix(codeBlockFence) {
                     inCodeBlock = false
                 }
@@ -35,14 +55,11 @@ class MarkdownParser {
             
             // 2. Handle Indented Code Blocks (approximate GFM)
             if line.hasPrefix("    ") || line.hasPrefix("\t") {
-                // Heuristic: check if previous line was blank or another code line
-                // For simplicity, we'll treat lines starting with 4 spaces as code if they aren't obviously something else
                 if !trimmed.isEmpty {
-                    // Check if it's a list item or other block first
                     if isBlockSyntax(trimmed) {
                         processNormalLine(line, into: &chunks, isLast: i == lines.count - 1)
                     } else {
-                        chunks.append(.code(line + (i < lines.count - 1 ? "\n" : "")))
+                        chunks.append(.code(line + suffix))
                     }
                 } else {
                     chunks.append(.syntax("\n"))
@@ -58,16 +75,12 @@ class MarkdownParser {
     }
     
     private func isBlockSyntax(_ trimmed: String) -> Bool {
-        // Headers
         if trimmed.hasPrefix("#") { return true }
-        // Lists
         if let first = trimmed.first, "-*+".contains(first) { return true }
         if trimmed.range(of: #"^\d+\."#, options: .regularExpression) != nil { return true }
-        // Blockquotes
         if trimmed.hasPrefix(">") { return true }
-        // Thematic breaks
         if trimmed.range(of: #"^([-*_])\s*\1\s*\1"#, options: .regularExpression) != nil { return true }
-        
+        if trimmed.hasPrefix("|") { return true }
         return false
     }
     
@@ -80,34 +93,67 @@ class MarkdownParser {
             return
         }
         
+        // Thematic break
+        if trimmed.range(of: #"^([-*_])\s*\1\s*\1"#, options: .regularExpression) != nil {
+            chunks.append(.syntax(line + suffix))
+            return
+        }
+        
+        // HTML Block approximation (if line starts with HTML tag and closes it, or just treating it simply)
+        // Here we just let inline HTML handle it, but if the whole line is an HTML block:
+        if trimmed.hasPrefix("<") && trimmed.hasSuffix(">") && trimmed.range(of: #"^<\/?[\w]+[^>]*>$"#, options: .regularExpression) != nil {
+            chunks.append(.syntax(line + suffix))
+            return
+        }
+        
+        // Table line
+        if trimmed.hasPrefix("|") || trimmed.contains("|") {
+            // Check if it's an alignment row like |---|---|
+            if trimmed.range(of: #"^\|?\s*[:\-]+\s*(?:\|\s*[:\-]+\s*)*\|?$"#, options: .regularExpression) != nil {
+                chunks.append(.syntax(line + suffix))
+                return
+            }
+            
+            if trimmed.hasPrefix("|") {
+                processTableLine(line, into: &chunks)
+                chunks.append(.syntax(suffix))
+                return
+            }
+        }
+        
         // Handle Block Syntax prefixes
         if trimmed.hasPrefix("#") {
             let hashPart = trimmed.prefix(while: { $0 == "#" })
             let rest = trimmed.dropFirst(hashPart.count)
             let leadingSpaces = rest.prefix(while: { $0 == " " })
-            chunks.append(.syntax(String(hashPart) + String(leadingSpaces)))
+            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
+            let prefixStr = String(line.prefix(actualPrefixCount))
+            chunks.append(.syntax(prefixStr))
             processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if trimmed.hasPrefix(">") {
             let rest = trimmed.dropFirst()
             let leadingSpaces = rest.prefix(while: { $0 == " " })
-            chunks.append(.syntax(">" + String(leadingSpaces)))
+            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
+            let prefixStr = String(line.prefix(actualPrefixCount))
+            chunks.append(.syntax(prefixStr))
             processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if let first = trimmed.first, "-*+".contains(first), trimmed.dropFirst().hasPrefix(" ") {
             let rest = trimmed.dropFirst()
             let leadingSpaces = rest.prefix(while: { $0 == " " })
-            chunks.append(.syntax(String(first) + String(leadingSpaces)))
+            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
+            let prefixStr = String(line.prefix(actualPrefixCount))
+            chunks.append(.syntax(prefixStr))
             processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if let range = trimmed.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
             let marker = String(trimmed[range])
-            chunks.append(.syntax(marker))
-            processInlineText(String(trimmed[range.upperBound...]), into: &chunks)
+            let actualPrefixCount = line.range(of: marker)!.upperBound
+            let prefixStr = String(line[..<actualPrefixCount])
+            chunks.append(.syntax(prefixStr))
+            processInlineText(String(line[actualPrefixCount...]), into: &chunks)
             chunks.append(.syntax(suffix))
-        } else if trimmed.range(of: #"^([-*_])\s*\1\s*\1"#, options: .regularExpression) != nil {
-            // Thematic break
-            chunks.append(.syntax(line + suffix))
         } else {
             // Paragraph line
             processInlineText(line, into: &chunks)
@@ -115,10 +161,39 @@ class MarkdownParser {
         }
     }
     
+    private func processTableLine(_ line: String, into chunks: inout [MarkdownChunk]) {
+        // Split by | but keep them as syntax
+        let components = line.components(separatedBy: "|")
+        for (i, comp) in components.enumerated() {
+            if i > 0 {
+                chunks.append(.syntax("|"))
+            }
+            if !comp.isEmpty {
+                // Keep leading/trailing spaces as syntax
+                let leadingSpaces = comp.prefix(while: { $0 == " " || $0 == "\t" })
+                let trailingSpaces = String(comp.reversed()).prefix(while: { $0 == " " || $0 == "\t" })
+                
+                if !leadingSpaces.isEmpty {
+                    chunks.append(.syntax(String(leadingSpaces)))
+                }
+                
+                let textContent = comp.trimmingCharacters(in: .whitespaces)
+                if !textContent.isEmpty {
+                    processInlineText(textContent, into: &chunks)
+                }
+                
+                if !trailingSpaces.isEmpty && comp.count > leadingSpaces.count {
+                    chunks.append(.syntax(String(trailingSpaces.reversed())))
+                }
+            }
+        }
+    }
+    
     private func processInlineText(_ text: String, into chunks: inout [MarkdownChunk]) {
         let nsString = text as NSString
-        // Regex for inline code and links/images (to preserve tags)
-        let inlineRegex = try! NSRegularExpression(pattern: "(`[^`]+`|\\[[^\\]]+\\]\\([^\\)]+\\)|!\\[[^\\]]*\\]\\([^\\)]+\\))", options: [])
+        // Regex for inline code, links/images, and HTML tags
+        // HTML tag: <[^>]+>
+        let inlineRegex = try! NSRegularExpression(pattern: "(`[^`]+`|\\[[^\\]]+\\]\\([^\\)]+\\)|!\\[[^\\]]*\\]\\([^\\)]+\\)|<[^>]+>)", options: [])
         let matches = inlineRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
         
         var currentIdx = 0
@@ -128,7 +203,7 @@ class MarkdownParser {
                 let rawText = nsString.substring(with: NSRange(location: currentIdx, length: range.location - currentIdx))
                 chunks.append(.text(rawText))
             }
-            chunks.append(.code(nsString.substring(with: range))) // Treat as code to preserve
+            chunks.append(.syntax(nsString.substring(with: range))) // Keep inline formatting/tags as syntax
             currentIdx = range.location + range.length
         }
         
