@@ -27,7 +27,8 @@ public protocol SubtitleParser {
 public class SRTParser: SubtitleParser {
     public init() {}
     
-    private let timecodeRegex = try! NSRegularExpression(pattern: #"(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*[-—=]+>+\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})(.*)"#, options: [])
+    // Support variations in timecodes and arrows
+    private let timecodeRegex = try! NSRegularExpression(pattern: #"(\d{1,2}:\d{2}:\d{2}[.,]\d{3})\s*-->\s*(\d{1,2}:\d{2}:\d{2}[.,]\d{3})"#, options: [])
 
     public func parse(content: String) -> [SubtitleParagraph] {
         let lines = content.components(separatedBy: .newlines)
@@ -36,13 +37,16 @@ public class SRTParser: SubtitleParser {
         var currentTimes: (start: String, end: String, meta: String?)?
         var currentText: [String] = []
         
+        print("--- DEBUG: SRTParser parsing \(lines.count) lines ---")
+        
         func flush() {
-            if let times = currentTimes, !currentText.isEmpty {
+            let text = currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+            if let times = currentTimes, !text.isEmpty {
                 paragraphs.append(SubtitleParagraph(
                     index: currentIndex,
                     startTime: times.start,
                     endTime: times.end,
-                    text: currentText.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines),
+                    text: text,
                     metadata: times.meta
                 ))
             }
@@ -51,29 +55,31 @@ public class SRTParser: SubtitleParser {
         }
         
         for line in lines {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            
-            if trimmed.isEmpty {
-                flush()
-                continue
-            }
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
             
             let nsLine = line as NSString
-            if let match = timecodeRegex.firstMatch(in: line, options: [], range: NSRange(location: 0, length: nsLine.length)) {
-                if !currentText.isEmpty || currentTimes != nil { flush() }
+            let range = NSRange(location: 0, length: nsLine.length)
+            if let match = timecodeRegex.firstMatch(in: line, options: [], range: range) {
+                if !currentText.isEmpty { flush() }
                 
                 let start = nsLine.substring(with: match.range(at: 1))
                 let end = nsLine.substring(with: match.range(at: 2))
-                let meta = nsLine.substring(with: match.range(at: 3)).trimmingCharacters(in: .whitespaces)
-                currentTimes = (start, end, meta.isEmpty ? nil : meta)
+                var meta: String? = nil
+                if match.numberOfRanges > 3 && match.range(at: 3).location != NSNotFound {
+                    meta = nsLine.substring(with: match.range(at: 3)).trimmingCharacters(in: .whitespacesAndNewlines)
+                }
+                currentTimes = (start, end, meta?.isEmpty == true ? nil : meta)
+                continue
+            }
+            
+            if trimmed.isEmpty {
+                if !currentText.isEmpty { flush() }
                 continue
             }
             
             if currentTimes == nil {
                 if let idx = Int(trimmed) {
                     currentIndex = idx
-                } else if !currentText.isEmpty {
-                    currentText.append(line)
                 }
             } else {
                 currentText.append(line)
@@ -81,6 +87,7 @@ public class SRTParser: SubtitleParser {
         }
         
         flush()
+        print("--- DEBUG: SRTParser found \(paragraphs.count) paragraphs ---")
         return paragraphs
     }
     

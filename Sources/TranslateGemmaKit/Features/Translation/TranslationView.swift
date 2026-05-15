@@ -37,6 +37,7 @@ public struct TranslationView: View {
     @State private var languageSearchText = ""
     @State private var isDraggingOver = false
     @State private var currentTranslationTask: Task<Void, Never>? = nil
+    @State private var showStopConfirmation = false
 
     let languages = LanguageManager.supportedLanguages
     
@@ -142,6 +143,16 @@ public struct TranslationView: View {
                         }
                     }
                     .padding(.bottom, 10)
+                    
+                    let shouldShowMetrics = (mode == .plainText && !inputText.isEmpty) || (mode == .file && !translationController.tasks.isEmpty)
+                    if shouldShowMetrics {
+                        HStack {
+                            Spacer()
+                            metricsCard
+                                .padding(.trailing, 40)
+                                .padding(.bottom, 10)
+                        }
+                    }
                 }
                 .padding(.top, 40)
                 .padding(.bottom, 40)
@@ -171,7 +182,13 @@ public struct TranslationView: View {
                 if !urls.isEmpty {
                     withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                         mode = .file
-                        translationController.addFiles(urls)
+                        translationController.addFiles(urls, defaultTargetLang: targetLanguage)
+                        let src = sourceLanguage == "Auto" ? nil : sourceLanguage
+                        for i in 0..<translationController.tasks.count {
+                            if translationController.tasks[i].status == .pending && translationController.tasks[i].sourceLang == nil {
+                                translationController.tasks[i].sourceLang = src
+                            }
+                        }
                     }
                     return true
                 }
@@ -209,6 +226,14 @@ public struct TranslationView: View {
         .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
             Button("OK") { errorMessage = nil }
         } message: { message in Text(message) }
+        .alert("Stop Translation", isPresented: $showStopConfirmation) {
+            Button("Cancel", role: .cancel) { }
+            Button("Stop", role: .destructive) {
+                cancelTranslation()
+            }
+        } message: {
+            Text("Are you sure you want to stop the current translation process? Unsaved progress will be lost.")
+        }
         .onAppear {
             initializeModel()
         }
@@ -227,6 +252,21 @@ public struct TranslationView: View {
                         } else {
                             targetLanguage = "English"
                         }
+                    }
+                }
+            }
+        }
+        .onChange(of: targetLanguage) { _, newValue in
+            if mode == .file {
+                translationController.updatePendingTasksTargetLanguage(to: newValue)
+            }
+        }
+        .onChange(of: sourceLanguage) { _, newValue in
+            if mode == .file {
+                let src = newValue == "Auto" ? nil : newValue
+                for i in 0..<translationController.tasks.count {
+                    if translationController.tasks[i].status == .pending {
+                        translationController.tasks[i].sourceLang = src
                     }
                 }
             }
@@ -277,6 +317,20 @@ public struct TranslationView: View {
                         Text("Task Queue")
                             .font(.system(size: 18, weight: .bold, design: .rounded))
                         Spacer()
+                        
+                        Button(action: importBatchFiles) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "plus")
+                                Text("Add Files")
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(currentAccentColor)
+                        
+                        Text("•")
+                            .foregroundColor(.secondary.opacity(0.5))
+                            
                         Button(action: { withAnimation { translationController.clearTasks() } }) {
                             Text("Clear All").font(.system(size: 12, weight: .medium))
                         }
@@ -287,8 +341,8 @@ public struct TranslationView: View {
                     
                     ScrollView {
                         VStack(spacing: 12) {
-                            ForEach(translationController.tasks) { task in
-                                TaskCard(task: task, accentColor: currentAccentColor) {
+                            ForEach($translationController.tasks) { $task in
+                                TaskCard(task: $task, accentColor: currentAccentColor) {
                                     translationController.removeTask(task)
                                 }
                             }
@@ -296,13 +350,36 @@ public struct TranslationView: View {
                         .padding(4)
                     }
                     
-                    HStack {
-                        Image(systemName: "info.circle")
-                        Text("Results will be saved as `filename.\(getLangCode(targetLanguage)).ext` in the same directory.")
-                            .font(.system(size: 11))
+                    HStack(spacing: 8) {
+                        Image(systemName: "folder.badge.plus")
+                        Text(translationController.exportDirectory != nil ? "Saving to: \(translationController.exportDirectory!.lastPathComponent)" : "Saving to: Original Directory")
+                            .font(.system(size: 11, weight: .medium))
+                        
+                        Spacer()
+                        
+                        Button(action: selectExportDirectory) {
+                            Text(translationController.exportDirectory != nil ? "Change..." : "Set Export Folder...")
+                                .font(.system(size: 11, weight: .bold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(Capsule().fill(currentAccentColor.opacity(0.1)))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundColor(currentAccentColor)
+                        
+                        if translationController.exportDirectory != nil {
+                            Button(action: { withAnimation { translationController.exportDirectory = nil } }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundColor(.secondary.opacity(0.5))
+                            }
+                            .buttonStyle(.plain)
+                        }
                     }
                     .foregroundColor(.secondary)
-                    .padding(.top, 8)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.03)))
+                    .padding(.top, 4)
                 }
                 .padding(30)
                 .background(
@@ -429,42 +506,108 @@ public struct TranslationView: View {
 
     @ViewBuilder
     private var translateButton: some View {
-        Button(action: translateAction) {
+        Button(action: {
+            if translationService.isTranslating {
+                showStopConfirmation = true
+            } else {
+                translateAction()
+            }
+        }) {
             HStack(spacing: 12) {
                 if translationService.isTranslating {
-                    ProgressView().controlSize(.small).tint(.white)
+                    Image(systemName: "stop.circle.fill").font(.system(size: 18))
+                    Text("Stop Translation").font(.system(size: 18, weight: .bold, design: .rounded))
                 } else {
                     Image(systemName: "sparkles").font(.system(size: 18, weight: .bold))
+                    Text("Translate Now").font(.system(size: 18, weight: .bold, design: .rounded))
                 }
-                Text("Translate Now").font(.system(size: 18, weight: .bold, design: .rounded))
             }
             .frame(width: 220, height: 56)
-            .background(Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : [currentAccentColor, currentAccentColor.opacity(0.8)], startPoint: .topLeading, endPoint: .bottomTrailing)))
+            .background(Capsule().fill(LinearGradient(colors: inputText.isEmpty ? [.gray.opacity(0.3)] : (translationService.isTranslating ? [.red, .red.opacity(0.8)] : [currentAccentColor, currentAccentColor.opacity(0.8)]), startPoint: .topLeading, endPoint: .bottomTrailing)))
             .foregroundColor(inputText.isEmpty ? .secondary : .white)
-            .shadow(color: currentAccentColor.opacity(inputText.isEmpty ? 0 : 0.3), radius: 15, x: 0, y: 8)
+            .shadow(color: (translationService.isTranslating ? Color.red : currentAccentColor).opacity(inputText.isEmpty ? 0 : 0.3), radius: 15, x: 0, y: 8)
         }
         .buttonStyle(.plain)
-        .disabled(inputText.isEmpty || translationService.isTranslating)
+        .disabled(inputText.isEmpty && !translationService.isTranslating)
+    }
+    
+    @ViewBuilder
+    private var metricsCard: some View {
+        let shouldShow = (mode == .plainText && !inputText.isEmpty) || (mode == .file && !translationController.tasks.isEmpty)
+        if shouldShow && (translationService.isTranslating || translationService.tokensPerSecond > 0) {
+            HStack(spacing: 16) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(translationService.isTranslating ? "Speed" : "Avg Speed")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text(String(format: "%.1f", translationService.tokensPerSecond))
+                            .font(.system(size: 14, weight: .bold, design: .monospaced))
+                            .foregroundColor(currentAccentColor)
+                        Text("tok/s")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.secondary)
+                    }
+                }
+                
+                Divider()
+                    .frame(height: 20)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(translationService.isTranslating ? "ETA" : "Total Time")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text(translationService.isTranslating ? formatETA(translationService.estimatedTimeRemaining) : formatETA(translationService.totalTimeTaken))
+                        .font(.system(size: 14, weight: .bold, design: .monospaced))
+                        .foregroundColor(currentAccentColor)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            )
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.15), lineWidth: 0.5)
+            )
+            .transition(.opacity.combined(with: .move(edge: .trailing)))
+        }
+    }
+    
+    private func formatETA(_ time: TimeInterval?) -> String {
+        guard let time = time, time > 0, !time.isInfinite, !time.isNaN else { return "--:--" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
     
     @ViewBuilder
     private var startBatchButton: some View {
-        Button(action: startBatchAction) {
+        Button(action: {
+            if translationController.isBatchProcessing {
+                showStopConfirmation = true
+            } else {
+                startBatchAction()
+            }
+        }) {
             HStack(spacing: 12) {
                 if translationController.isBatchProcessing {
-                    ProgressView().controlSize(.small).tint(.white)
+                    Image(systemName: "stop.circle.fill").font(.system(size: 18))
+                    Text("Stop Processing").font(.system(size: 18, weight: .bold, design: .rounded))
                 } else {
                     Image(systemName: "play.fill").font(.system(size: 18))
+                    Text("Start Processing").font(.system(size: 18, weight: .bold, design: .rounded))
                 }
-                Text("Start Processing").font(.system(size: 18, weight: .bold, design: .rounded))
             }
             .frame(width: 240, height: 56)
-            .background(Capsule().fill(currentAccentColor))
+            .background(Capsule().fill(translationController.isBatchProcessing ? .red : currentAccentColor))
             .foregroundColor(.white)
-            .shadow(color: currentAccentColor.opacity(0.3), radius: 15, x: 0, y: 8)
+            .shadow(color: (translationController.isBatchProcessing ? Color.red : currentAccentColor).opacity(0.3), radius: 15, x: 0, y: 8)
         }
         .buttonStyle(.plain)
-        .disabled(translationController.isBatchProcessing)
     }
 
     @ViewBuilder
@@ -485,10 +628,40 @@ public struct TranslationView: View {
             Button(action: copyToClipboard) { Image(systemName: "doc.on.doc") }
                 .buttonStyle(OrnamentButtonStyle())
                 .disabled(outputText.isEmpty)
+                
+            ShareLink(item: outputText) {
+                Image(systemName: "square.and.arrow.up")
+            }
+            .buttonStyle(OrnamentButtonStyle())
+            .disabled(outputText.isEmpty)
+            .help("Share Text")
+            
+            Button(action: exportToFile) { Image(systemName: "square.and.arrow.down") }
+                .buttonStyle(OrnamentButtonStyle())
+                .disabled(outputText.isEmpty)
+                .help("Export as TXT")
         }
     }
 
     // MARK: - Actions
+    
+    private func cancelTranslation() {
+        currentTranslationTask?.cancel()
+        currentTranslationTask = nil
+    }
+    
+    private func selectExportDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Select Export Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            withAnimation {
+                translationController.exportDirectory = url
+            }
+        }
+    }
     
     private func initializeModel() {
         Task {
@@ -515,7 +688,13 @@ public struct TranslationView: View {
         panel.allowsMultipleSelection = true
         panel.allowedContentTypes = [.text, .plainText, UTType(filenameExtension: "srt")!, UTType(filenameExtension: "vtt")!, UTType(filenameExtension: "ass")!, UTType("public.markdown") ?? .plainText]
         if panel.runModal() == .OK {
-            translationController.addFiles(panel.urls)
+            translationController.addFiles(panel.urls, defaultTargetLang: targetLanguage)
+            let src = sourceLanguage == "Auto" ? nil : sourceLanguage
+            for i in 0..<translationController.tasks.count {
+                if translationController.tasks[i].status == .pending && translationController.tasks[i].sourceLang == nil {
+                    translationController.tasks[i].sourceLang = src
+                }
+            }
         }
     }
     
@@ -546,14 +725,25 @@ public struct TranslationView: View {
     
     private func startBatchAction() {
         guard !selectedModelId.isEmpty else { showModelDashboard = true; return }
-        Task {
-            await translationController.runBatch(targetLang: targetLanguage, translationService: translationService, selectedModelId: selectedModelId)
+        currentTranslationTask?.cancel()
+        currentTranslationTask = Task {
+            await translationController.runBatch(translationService: translationService, selectedModelId: selectedModelId)
+            currentTranslationTask = nil
         }
     }
     
     private func copyToClipboard() {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(outputText, forType: .string)
+    }
+    
+    private func exportToFile() {
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.plainText]
+        panel.nameFieldStringValue = "Translation.txt"
+        if panel.runModal() == .OK, let url = panel.url {
+            try? outputText.write(to: url, atomically: true, encoding: .utf8)
+        }
     }
     
     private func swapLanguages() {
@@ -642,7 +832,7 @@ struct ModeSwitcher: View {
 }
 
 struct TaskCard: View {
-    let task: TranslationTask
+    @Binding var task: TranslationTask
     let accentColor: Color
     let onRemove: () -> Void
     
@@ -655,50 +845,127 @@ struct TaskCard: View {
             }
             .frame(width: 40, height: 40)
             
+            // Name & Size
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.fileName)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
-                
-                HStack(spacing: 10) {
-                    Text(ByteCountFormatter().string(fromByteCount: task.fileSize))
-                    Circle().fill(.secondary).frame(width: 2, height: 2)
-                    Text(task.status.description)
+                    .lineLimit(1)
+                Text(ByteCountFormatter().string(fromByteCount: task.fileSize))
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+            }
+            .frame(width: 160, alignment: .leading)
+            
+            Divider().frame(height: 20)
+            
+            // Language Settings
+            if case .pending = task.status {
+                HStack(spacing: 6) {
+                    Text(task.sourceLang ?? "Auto")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40, alignment: .leading)
+                    
+                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                    
+                    Menu {
+                        ForEach(LanguageManager.supportedLanguages, id: \.self) { lang in
+                            Button(lang) { task.targetLang = lang }
+                        }
+                    } label: {
+                        Text(task.targetLang)
+                            .font(.system(size: 11, weight: .semibold))
+                            .lineLimit(1)
+                    }
+                    .menuStyle(.borderlessButton)
+                    .frame(width: 100)
                 }
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+            } else {
+                HStack(spacing: 6) {
+                    Text(task.sourceLang ?? "Auto")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.secondary)
+                        .frame(width: 40, alignment: .leading)
+                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                    Text(task.targetLang)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .frame(width: 100, alignment: .leading)
+                }
             }
             
             Spacer()
             
+            // Progress / Status / Metrics
             if case .processing = task.status {
-                ProgressView(value: task.status.progress)
-                    .progressViewStyle(.linear)
-                    .frame(width: 100)
-                    .tint(accentColor)
-            } else if case .completed(let url) = task.status {
-                Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
-                    Image(systemName: "folder.fill")
-                        .foregroundColor(accentColor)
+                VStack(alignment: .trailing, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(String(format: "%.1f tok/s", task.tokensPerSecond))
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(accentColor)
+                        if let eta = task.estimatedTimeRemaining, eta > 0 {
+                            Text(formatETA(eta))
+                                .font(.system(size: 11, weight: .medium, design: .monospaced))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(accentColor)
                 }
-                .buttonStyle(.plain)
-                .help("Show in Finder")
-            } else if case .failed = task.status {
-                Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
+                .frame(width: 150, alignment: .trailing)
+            } else if case .completed(let url) = task.status {
+                HStack(spacing: 12) {
+                    Text("Completed").font(.system(size: 12, weight: .bold)).foregroundColor(.green)
+                    Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
+                        Image(systemName: "folder.fill").foregroundColor(.green)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Show in Finder")
+                }
+            } else if case .failed(let error) = task.status {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
+                    Text(error).font(.system(size: 10)).foregroundColor(.red).lineLimit(1).frame(maxWidth: 100)
+                }
+            } else {
+                Text("Waiting...")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(.secondary)
             }
             
-            Button(action: onRemove) {
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+            if case .processing = task.status {
+                // Cannot remove while processing
+                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundColor(.clear)
+            } else {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.secondary.opacity(0.5))
             }
-            .buttonStyle(.plain)
-            .foregroundColor(.secondary.opacity(0.5))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.05)))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .strokeBorder(
+                    task.status == .pending ? Color.white.opacity(0.1) : (
+                        task.status == .processing ? accentColor.opacity(0.3) : Color.clear
+                    ),
+                    lineWidth: 1
+                )
+        )
+    }
+    
+    private func formatETA(_ time: TimeInterval?) -> String {
+        guard let time = time, time >= 0, !time.isInfinite, !time.isNaN else { return "--:--" }
+        let minutes = Int(time) / 60
+        let seconds = Int(time) % 60
+        return String(format: "%02d:%02d", minutes, seconds)
     }
 }
-
-
 
 struct LanguageRow: View {
     let lang: String

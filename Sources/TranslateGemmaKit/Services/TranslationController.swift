@@ -6,6 +6,7 @@ import Observation
 public class TranslationController {
     public var tasks: [TranslationTask] = []
     public var isBatchProcessing = false
+    public var exportDirectory: URL? = nil
     
     private let srtParser = SRTParser()
     private let vttParser = VTTParser()
@@ -14,10 +15,18 @@ public class TranslationController {
     
     public init() {}
     
-    public func addFiles(_ urls: [URL]) {
+    public func addFiles(_ urls: [URL], defaultTargetLang: String) {
         for url in urls {
             if !tasks.contains(where: { $0.sourceURL == url }) {
-                tasks.append(TranslationTask(sourceURL: url))
+                tasks.append(TranslationTask(sourceURL: url, targetLang: defaultTargetLang))
+            }
+        }
+    }
+    
+    public func updatePendingTasksTargetLanguage(to lang: String) {
+        for i in 0..<tasks.count {
+            if tasks[i].status == .pending {
+                tasks[i].targetLang = lang
             }
         }
     }
@@ -30,7 +39,7 @@ public class TranslationController {
         tasks.removeAll(where: { $0.id == task.id })
     }
     
-    public func processFile(url: URL, targetLang: String, onProgress: ((Int, Int) -> Void)? = nil, translator: (String) async throws -> String) async throws -> String {
+    public func processFile(url: URL, sourceLang: String?, targetLang: String, onProgress: ((Int, Int) -> Void)? = nil, translator: (String) async throws -> String) async throws -> String {
         let content = try String(contentsOf: url)
         let ext = url.pathExtension.lowercased()
         
@@ -88,18 +97,36 @@ public class TranslationController {
         }
     }
     
-    public func runBatch(targetLang: String, translationService: TranslationService, selectedModelId: String) async {
+    @MainActor
+    public func runBatch(translationService: TranslationService, selectedModelId: String) async {
         isBatchProcessing = true
         defer { isBatchProcessing = false }
+        
+        let totalPendingSize = tasks.filter { $0.status == .pending }.map { $0.fileSize }.reduce(0, +)
+        translationService.startBatchSession(estimatedTokens: Int(totalPendingSize / 2))
+        defer { translationService.endBatchSession() }
         
         for i in 0..<tasks.count {
             guard tasks[i].status == .pending else { continue }
             
+            try? Task.checkCancellation()
+            if Task.isCancelled { break }
+            
             let url = tasks[i].sourceURL
+            let sourceLang = tasks[i].sourceLang
+            let targetLang = tasks[i].targetLang
             let outputURL = generateOutputURL(for: url, targetLang: targetLang)
             
+            let estimatedFileTokens = Int(tasks[i].fileSize / 2)
+            var currentFileTokens = 0
+            let fileStartTime = Date()
+            var lastFileUpdate = Date()
+            
+            tasks[i].status = .processing
+            
             do {
-                let folderURL = url.deletingLastPathComponent()
+                print("--- DEBUG: Processing file: \(url.lastPathComponent) ---")
+                let folderURL = exportDirectory ?? url.deletingLastPathComponent()
                 if !FileManager.default.isWritableFile(atPath: folderURL.path) {
                     throw NSError(domain: "TranslationController", code: 1, userInfo: [NSLocalizedDescriptionKey: "No write permission in directory: \(folderURL.lastPathComponent)"])
                 }
@@ -108,28 +135,46 @@ public class TranslationController {
                 
                 let result = try await processFile(
                     url: url,
+                    sourceLang: sourceLang,
                     targetLang: targetLang,
                     onProgress: { current, total in
-                        self.tasks[i].status = .processing(current: current, total: total)
+                        if current % 10 == 0 || current == total {
+                             print("--- DEBUG: Progress for \(url.lastPathComponent): \(current)/\(total) ---")
+                        }
                     }
                 ) { text in
-                    return try await self.translateWithStreaming(text: text, targetLang: targetLang, service: translationService)
+                    if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        return text
+                    }
+                    let resultText = try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLang) { chunk in
+                        currentFileTokens += 1
+                        
+                        let now = Date()
+                        if now.timeIntervalSince(lastFileUpdate) >= 1.0 {
+                            let elapsed = now.timeIntervalSince(fileStartTime)
+                            if elapsed > 0 {
+                                self.tasks[i].tokensPerSecond = Double(currentFileTokens) / elapsed
+                                let remaining = max(0, estimatedFileTokens - currentFileTokens)
+                                if self.tasks[i].tokensPerSecond > 0 {
+                                    self.tasks[i].estimatedTimeRemaining = Double(remaining) / self.tasks[i].tokensPerSecond
+                                }
+                            }
+                            lastFileUpdate = now
+                        }
+                    }
+                    return resultText
                 }
                 
+                print("--- DEBUG: Writing result for \(url.lastPathComponent) (\(result.count) chars) to \(outputURL.lastPathComponent) ---")
                 try result.write(to: outputURL, atomically: true, encoding: .utf8)
                 tasks[i].status = .completed(outputURL: outputURL)
+            } catch is CancellationError {
+                tasks[i].status = .failed("Cancelled")
+                break
             } catch {
                 tasks[i].status = .failed(error.localizedDescription)
             }
         }
-    }
-    
-    private func translateWithStreaming(text: String, targetLang: String, service: TranslationService) async throws -> String {
-        var result = ""
-        _ = try await service.translate(text: text, sourceLang: nil, targetLang: targetLang) { chunk in
-            result += chunk
-        }
-        return result
     }
     
     private func generateOutputURL(for url: URL, targetLang: String) -> URL {
@@ -137,14 +182,15 @@ public class TranslationController {
         let fileName = url.deletingPathExtension().lastPathComponent
         let ext = url.pathExtension
         let newName = "\(fileName).\(langCode).\(ext)"
-        let outputURL = url.deletingLastPathComponent().appendingPathComponent(newName)
+        let baseDir = exportDirectory ?? url.deletingLastPathComponent()
+        let outputURL = baseDir.appendingPathComponent(newName)
         
         if FileManager.default.fileExists(atPath: outputURL.path) {
             var index = 1
             var indexedURL: URL
             repeat {
                 let indexedName = "\(fileName).\(langCode).\(index).\(ext)"
-                indexedURL = url.deletingLastPathComponent().appendingPathComponent(indexedName)
+                indexedURL = baseDir.appendingPathComponent(indexedName)
                 index += 1
             } while FileManager.default.fileExists(atPath: indexedURL.path)
             return indexedURL
@@ -159,6 +205,12 @@ public struct TranslationTask: Identifiable, Equatable {
     public let sourceURL: URL
     public var status: TaskStatus = .pending
     
+    public var sourceLang: String? = nil
+    public var targetLang: String
+    
+    public var tokensPerSecond: Double = 0
+    public var estimatedTimeRemaining: TimeInterval? = nil
+    
     public var fileName: String { sourceURL.lastPathComponent }
     public var fileSize: Int64 {
         (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size] as? Int64) ?? 0
@@ -171,24 +223,16 @@ public struct TranslationTask: Identifiable, Equatable {
 
 public enum TaskStatus: Equatable {
     case pending
-    case processing(current: Int, total: Int)
+    case processing
     case completed(outputURL: URL)
     case failed(String)
     
     public var description: String {
         switch self {
         case .pending: return "Pending"
-        case .processing(let current, let total): return "Processing \(current)/\(total)"
+        case .processing: return "Processing"
         case .completed: return "Completed"
         case .failed(let error): return "Failed: \(error)"
-        }
-    }
-    
-    public var progress: Double {
-        switch self {
-        case .processing(let current, let total): return Double(current) / Double(total)
-        case .completed: return 1.0
-        default: return 0.0
         }
     }
 }

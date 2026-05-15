@@ -45,12 +45,45 @@ public struct NativeTextEditor: NSViewRepresentable {
     
     public func updateNSView(_ nsView: NSScrollView, context: Context) {
         guard let textView = nsView.documentView as? NSTextView else { return }
-        if textView.string != text {
-            textView.string = text
-        }
-        textView.font = font
-        textView.textColor = textColor
+        
         textView.isEditable = !isReadOnly
+        
+        let currentString = textView.string
+        if currentString != text {
+            let clipView = nsView.contentView
+            let documentHeight = textView.bounds.height
+            // Add a generous tolerance for bottom detection
+            let isAtBottom = clipView.bounds.maxY >= documentHeight - 50
+            
+            let selectedRange = textView.selectedRange()
+            
+            if !currentString.isEmpty && text.count > currentString.count && text.hasPrefix(currentString) {
+                // Efficiently append the difference to prevent full layout invalidation (fixes flicker)
+                let diff = String(text.dropFirst(currentString.count))
+                let attrString = NSAttributedString(string: diff, attributes: [
+                    .font: font,
+                    .foregroundColor: textColor
+                ])
+                textView.textStorage?.append(attrString)
+            } else {
+                // Full string replacement
+                textView.string = text
+                textView.font = font
+                textView.textColor = textColor
+            }
+            
+            // Restore selection if valid
+            if selectedRange.location + selectedRange.length <= textView.string.utf16.count {
+                textView.setSelectedRange(selectedRange)
+            }
+            
+            if isAtBottom {
+                textView.scrollToEndOfDocument(nil)
+            }
+        } else {
+            if textView.font != font { textView.font = font }
+            if textView.textColor != textColor { textView.textColor = textColor }
+        }
     }
     
     public func makeCoordinator() -> Coordinator {

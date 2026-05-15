@@ -9,6 +9,7 @@ let package = Package(
     products: [
         .library(name: "TranslateGemmaKit", targets: ["TranslateGemmaKit"]),
         .executable(name: "TranslateGemmaApp", targets: ["TranslateGemmaApp"]),
+        .executable(name: "BatchTest", targets: ["BatchTest"]),
     ],
     dependencies: [
         .package(url: "https://github.com/ml-explore/mlx-swift.git", exact: "0.31.3"),
@@ -39,6 +40,12 @@ let package = Package(
             ],
             resources: [
                 .process("Resources")
+            ]
+        ),
+        .executableTarget(
+            name: "BatchTest",
+            dependencies: [
+                "TranslateGemmaKit"
             ]
         ),
         .testTarget(

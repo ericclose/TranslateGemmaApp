@@ -15,6 +15,16 @@ import os
 public class TranslationService {
     public var isTranslating = false
     public var progress: Double = 0
+    public var tokensPerSecond: Double = 0
+    public var estimatedTimeRemaining: TimeInterval? = nil
+    public var totalTimeTaken: TimeInterval? = nil
+    
+    private var globalStartTime: Date?
+    private var globalTokenCount: Int = 0
+    private var globalEstimatedTokens: Int = 0
+    private var lastMetricsUpdateTime: Date? = nil
+    
+    private var isBatchSessionActive: Bool = false
     
     private var modelContainer: ModelContainer?
     private var currentModelId: String?
@@ -123,16 +133,35 @@ public class TranslationService {
     public func translate(text: String, sourceLang: String?, targetLang: String, onChunk: ((String) -> Void)? = nil) async throws -> String {
         recordActivity()
         self.isTranslating = true
+        if !isBatchSessionActive {
+            self.tokensPerSecond = 0
+            self.estimatedTimeRemaining = nil
+            self.totalTimeTaken = nil
+            self.globalStartTime = Date()
+            self.globalTokenCount = 0
+            self.globalEstimatedTokens = max(text.count / 2, 50)
+            self.lastMetricsUpdateTime = nil
+        }
         
         // Maximize system resource scheduling during translation
         let physicalMemory = ProcessInfo.processInfo.physicalMemory
         MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.95)
         
         defer { 
-            self.isTranslating = false 
-            // Return to conservative memory usage after translation is complete
-            MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.5)
-            MLX.Memory.clearCache()
+            if !isBatchSessionActive {
+                self.isTranslating = false
+                if let startTime = self.globalStartTime {
+                    let totalElapsed = Date().timeIntervalSince(startTime)
+                    self.totalTimeTaken = totalElapsed
+                    if totalElapsed > 0 {
+                        self.tokensPerSecond = Double(self.globalTokenCount) / totalElapsed
+                    }
+                    self.estimatedTimeRemaining = nil
+                }
+                // Return to conservative memory usage after translation is complete
+                MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.5)
+                MLX.Memory.clearCache()
+            }
         }
         
         guard let container = modelContainer else {
@@ -156,41 +185,53 @@ public class TranslationService {
         return fullOutput.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
+    public func startBatchSession(estimatedTokens: Int) {
+        self.isBatchSessionActive = true
+        self.tokensPerSecond = 0
+        self.estimatedTimeRemaining = nil
+        self.totalTimeTaken = nil
+        self.globalStartTime = Date()
+        self.globalTokenCount = 0
+        self.globalEstimatedTokens = estimatedTokens
+        self.lastMetricsUpdateTime = nil
+        self.isTranslating = true
+    }
+    
+    public func endBatchSession() {
+        self.isBatchSessionActive = false
+        self.isTranslating = false
+        if let startTime = self.globalStartTime {
+            let totalElapsed = Date().timeIntervalSince(startTime)
+            self.totalTimeTaken = totalElapsed
+            if totalElapsed > 0 {
+                self.tokensPerSecond = Double(self.globalTokenCount) / totalElapsed
+            }
+            self.estimatedTimeRemaining = nil
+        }
+        let physicalMemory = ProcessInfo.processInfo.physicalMemory
+        MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.5)
+        MLX.Memory.clearCache()
+    }
+    
     private func translateChunk(text: String, sourceLang: String?, targetLang: String, container: ModelContainer, onChunk: ((String) -> Void)?) async throws -> String {
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text
         }
-        
-        let sCode: String
-        if let explicitCode = getLanguageCode(sourceLang) {
-            sCode = explicitCode
-        } else {
-            // Automatic Identification using Apple's NaturalLanguage framework
-            sCode = detectLanguageCode(for: text)
-            logger.info("Auto-detected source language: \(sCode)")
-        }
-        
-        let tCode = getLanguageCode(targetLang) ?? "zh"
+        let sLangCode = getLanguageCode(sourceLang) ?? detectLanguageCode(for: text)
+        let tLangCode = getLanguageCode(targetLang) ?? "zh"
         
         let content: [String: Any] = [
             "type": "text",
-            "text": text,
-            "source_lang_code": sCode,
-            "target_lang_code": tCode
+            "source_lang_code": sLangCode,
+            "target_lang_code": tLangCode,
+            "text": text
         ]
         
-        let messages: [[String: Any]] = [["role": "user", "content": text]]
-        let structuredMessages: [[String: Any]] = [["role": "user", "content": [content]]]
-        
-        let input: LMInput
-        do {
-            input = try await container.prepare(input: UserInput(messages: structuredMessages))
-        } catch {
-            input = try await container.prepare(input: UserInput(messages: messages))
-        }
+        let messages: [[String: Any]] = [["role": "user", "content": [content]]]
+        let input = try await container.prepare(input: UserInput(messages: messages))
         
         var outputText = ""
-        
+        var chunkCount = 0        
         // Performance Optimization: Use prefillStepSize to speed up initial prompt processing.
         let prefillStepSize: Int
         if let modelId = currentModelId {
@@ -218,6 +259,32 @@ public class TranslationService {
         for try await generation in stream {
             try Task.checkCancellation()
             if case .chunk(let genText) = generation {
+                chunkCount += 1
+                if chunkCount <= 3 {
+                    print("--- DEBUG: Chunk \(chunkCount): [\(genText)] ---")
+                }
+                self.globalTokenCount += 1
+                if let startTime = self.globalStartTime {
+                    let now = Date()
+                    let elapsed = now.timeIntervalSince(startTime)
+                    let lastUpdate = self.lastMetricsUpdateTime ?? startTime
+                    
+                    if now.timeIntervalSince(lastUpdate) >= 1.0 {
+                        self.tokensPerSecond = Double(self.globalTokenCount) / elapsed
+                        
+                        // Dynamically expand estimated tokens if we exceeded the initial estimate
+                        if self.globalTokenCount >= self.globalEstimatedTokens {
+                            self.globalEstimatedTokens = self.globalTokenCount + 20
+                        }
+                        
+                        let remainingTokens = max(0, self.globalEstimatedTokens - self.globalTokenCount)
+                        if self.tokensPerSecond > 0 {
+                            self.estimatedTimeRemaining = Double(remainingTokens) / self.tokensPerSecond
+                        }
+                        self.lastMetricsUpdateTime = now
+                    }
+                }
+
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                 if stopSequences.contains(where: { genText.contains($0) }) { break }
                 outputText += genText

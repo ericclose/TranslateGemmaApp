@@ -34,8 +34,8 @@ final class IntegrationTests: XCTestCase {
         """
         try mdContent.write(to: tempFile, atomically: true, encoding: .utf8)
         
-        controller.addFiles([tempFile])
-        await controller.runBatch(targetLang: "Chinese (Simplified)", translationService: service, selectedModelId: modelId)
+        controller.addFiles([tempFile], defaultTargetLang: "Chinese (Simplified)")
+        await controller.runBatch(translationService: service, selectedModelId: modelId)
         
         let outputURL = tempFile.deletingLastPathComponent().appendingPathComponent("test.zh.md")
         
@@ -65,11 +65,11 @@ final class IntegrationTests: XCTestCase {
         """
         try srtContent.write(to: tempFile, atomically: true, encoding: .utf8)
         
-        controller.addFiles([tempFile])
+        controller.addFiles([tempFile], defaultTargetLang: "Chinese (Simplified)")
         XCTAssertEqual(controller.tasks.count, 1)
         XCTAssertEqual(controller.tasks[0].status, .pending)
         
-        await controller.runBatch(targetLang: "Chinese (Simplified)", translationService: service, selectedModelId: modelId)
+        await controller.runBatch(translationService: service, selectedModelId: modelId)
         
         if case .completed = controller.tasks[0].status {
             XCTAssertTrue(true)
@@ -80,5 +80,30 @@ final class IntegrationTests: XCTestCase {
         try? FileManager.default.removeItem(at: tempFile)
         let outPath = tempFile.deletingLastPathComponent().appendingPathComponent("ui_test.zh.srt")
         try? FileManager.default.removeItem(at: outPath)
+    }
+    
+    func testTxtFileTranslation() async throws {
+        let controller = TranslationController()
+        let service = await TranslationService()
+        
+        let tempFile = FileManager.default.temporaryDirectory.appendingPathComponent("test.txt")
+        let txtContent = "Hello. This is a text file that should not be empty after translation. The pipeline should correctly yield chunks and write them properly."
+        try txtContent.write(to: tempFile, atomically: true, encoding: .utf8)
+        
+        controller.addFiles([tempFile], defaultTargetLang: "Chinese (Simplified)")
+        await controller.runBatch(translationService: service, selectedModelId: modelId)
+        
+        let outputURL = tempFile.deletingLastPathComponent().appendingPathComponent("test.zh.txt")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: outputURL.path), "TXT output file should be created")
+        
+        if let translatedContent = try? String(contentsOf: outputURL) {
+            XCTAssertFalse(translatedContent.isEmpty, "TXT file output should NOT be empty")
+            print("TXT translation output length: \\(translatedContent.count)")
+        } else {
+            XCTFail("Could not read TXT output file")
+        }
+        
+        try? FileManager.default.removeItem(at: tempFile)
+        try? FileManager.default.removeItem(at: outputURL)
     }
 }
