@@ -119,7 +119,7 @@ final class ParserTests: XCTestCase {
         // ...
         
         let texts = chunks.compactMap { chunk -> String? in
-            if case .text(let t) = chunk { return t }
+            if case .text(let t, _) = chunk { return t }
             return nil
         }
         
@@ -158,7 +158,7 @@ final class ParserTests: XCTestCase {
         let chunks = parser.parseForTranslation(content: markdown)
         
         let texts = chunks.compactMap { chunk -> String? in
-            if case .text(let t) = chunk { return t }
+            if case .text(let t, _) = chunk { return t }
             return nil
         }
         
@@ -178,7 +178,7 @@ final class ParserTests: XCTestCase {
         let chunks = parser.parseForTranslation(content: markdown)
         
         let texts = chunks.compactMap { chunk -> String? in
-            if case .text(let t) = chunk { return t }
+            if case .text(let t, _) = chunk { return t }
             return nil
         }
         
@@ -209,7 +209,7 @@ final class ParserTests: XCTestCase {
         let chunks = parser.parseForTranslation(content: markdown)
         
         let texts = chunks.compactMap { chunk -> String? in
-            if case .text(let t) = chunk { return t }
+            if case .text(let t, _) = chunk { return t }
             return nil
         }
         

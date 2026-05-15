@@ -1,7 +1,7 @@
 import Foundation
 
 enum MarkdownChunk {
-    case text(String)
+    case text(String, [String: String])
     case code(String)
     case syntax(String) // Headers, lists, blockquote markers, thematic breaks, tables, HTML, YAML, etc.
 }
@@ -194,20 +194,34 @@ class MarkdownParser {
         let inlineRegex = try! NSRegularExpression(pattern: "(`[^`]+`|\\[[^\\]]+\\]\\([^\\)]+\\)|!\\[[^\\]]*\\]\\([^\\)]+\\)|<[^>]+>)", options: [])
         let matches = inlineRegex.matches(in: text, options: [], range: NSRange(location: 0, length: nsString.length))
         
+        if matches.isEmpty {
+            chunks.append(.text(text, [:]))
+            return
+        }
+        
         var currentIdx = 0
-        for match in matches {
+        var replacedText = ""
+        var placeholders: [String: String] = [:]
+        
+        for (index, match) in matches.enumerated() {
             let range = match.range
             if range.location > currentIdx {
-                let rawText = nsString.substring(with: NSRange(location: currentIdx, length: range.location - currentIdx))
-                chunks.append(.text(rawText))
+                replacedText += nsString.substring(with: NSRange(location: currentIdx, length: range.location - currentIdx))
             }
-            chunks.append(.syntax(nsString.substring(with: range))) // Keep inline formatting/tags as syntax
+            
+            let original = nsString.substring(with: range)
+            let ph = "<ph id=\"\(index)\"/>"
+            replacedText += ph
+            placeholders[ph] = original
+            
             currentIdx = range.location + range.length
         }
         
         if currentIdx < nsString.length {
-            chunks.append(.text(nsString.substring(from: currentIdx)))
+            replacedText += nsString.substring(from: currentIdx)
         }
+        
+        chunks.append(.text(replacedText, placeholders))
     }
     
     func assemble(chunks: [MarkdownChunk], translatedTexts: [String]) -> String {

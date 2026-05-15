@@ -68,10 +68,14 @@ public class TranslationController {
             let translatableCount = chunks.filter { if case .text = $0 { return true }; return false }.count
             var current = 0
             for chunk in chunks {
-                if case .text(let t) = chunk {
+                if case .text(let t, let placeholders) = chunk {
                     current += 1
                     onProgress?(current, translatableCount)
-                    translatedTexts.append(try await translator(t))
+                    var translated = try await translator(t)
+                    for (ph, original) in placeholders {
+                        translated = translated.replacingOccurrences(of: ph, with: original)
+                    }
+                    translatedTexts.append(translated)
                 }
             }
             return mdParser.assemble(chunks: chunks, translatedTexts: translatedTexts)
