@@ -35,22 +35,26 @@ struct TranslationCard<HeaderTitle: View, Actions: View>: View {
                         .foregroundColor(.secondary.opacity(0.4))
                         .allowsHitTesting(false)
                         .padding(.top, 4)
+                        .padding(.leading, 5) // Matches lineFragmentPadding
                 }
                 
                 if isReadOnly {
                     NativeTextEditor(
                         text: .constant(text),
-                        font: .systemFont(ofSize: fontSize, weight: .medium),
+                        font: NSFont.systemFont(ofSize: fontSize, weight: .medium).rounded() ?? .systemFont(ofSize: fontSize, weight: .medium),
                         textColor: textColor == .primary ? .labelColor : .systemBlue,
                         isReadOnly: true
                     )
                     .padding(.bottom, 10)
-                    .padding(.top, 4)
+                    .padding(.top, 5)
                 } else {
-                    NativeTextEditor(text: $text, font: .systemFont(ofSize: fontSize, weight: .medium))
-                        .padding(.bottom, 10)
-                        .padding(.top, 4)
-                        .frame(minHeight: 250)
+                    NativeTextEditor(
+                        text: $text,
+                        font: NSFont.systemFont(ofSize: fontSize, weight: .medium).rounded() ?? .systemFont(ofSize: fontSize, weight: .medium)
+                    )
+                    .padding(.bottom, 10)
+                    .padding(.top, 5)
+                    .frame(minHeight: 250)
                 }
             }
         }

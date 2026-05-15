@@ -66,3 +66,10 @@ public struct NativeTextEditor: NSViewRepresentable {
         }
     }
 }
+
+extension NSFont {
+    public func rounded() -> NSFont? {
+        guard let descriptor = fontDescriptor.withDesign(.rounded) else { return nil }
+        return NSFont(descriptor: descriptor, size: pointSize)
+    }
+}

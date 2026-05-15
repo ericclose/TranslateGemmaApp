@@ -5,8 +5,8 @@ import os
 private let logger = Logger(subsystem: "com.innovation.TranslateGemmaApp", category: "UI")
 
 enum TranslationMode: String, CaseIterable {
-    case text = "Text Translation"
-    case file = "File Processing"
+    case plainText = "Plain Text Mode"
+    case file = "File Mode"
 }
 
 public struct TranslationView: View {
@@ -17,7 +17,7 @@ public struct TranslationView: View {
     @AppStorage("selectedModelId") private var selectedModelId: String = ""
     
     // Mode State
-    @State private var mode: TranslationMode = .text
+    @State private var mode: TranslationMode = .plainText
     
     // Text Mode State
     @State private var inputText: String = ""
@@ -112,14 +112,14 @@ public struct TranslationView: View {
                         .ignoresSafeArea()
                 )
                 
-                if mode == .text {
+                if mode == .plainText {
                     GeometryReader { geometry in
-                        textTranslationView(geometry: geometry)
+                        plainTextTranslationView(geometry: geometry)
                     }
                     .transition(.asymmetric(insertion: .move(edge: .leading).combined(with: .opacity), removal: .move(edge: .leading).combined(with: .opacity)))
                 } else {
                     GeometryReader { geometry in
-                        fileProcessingView(geometry: geometry)
+                        fileModeView(geometry: geometry)
                     }
                     .transition(.asymmetric(insertion: .move(edge: .trailing).combined(with: .opacity), removal: .move(edge: .trailing).combined(with: .opacity)))
                 }
@@ -135,7 +135,7 @@ public struct TranslationView: View {
                     }
                     
                     HStack {
-                        if mode == .text {
+                        if mode == .plainText {
                             translateButton
                         } else if !translationController.tasks.isEmpty {
                             startBatchButton
@@ -236,7 +236,7 @@ public struct TranslationView: View {
     // MARK: - Layout Views
     
     @ViewBuilder
-    private func textTranslationView(geometry: GeometryProxy) -> some View {
+    private func plainTextTranslationView(geometry: GeometryProxy) -> some View {
         HStack(spacing: 24) {
             TranslationCard(
                 title: { sourceActions },
@@ -267,7 +267,7 @@ public struct TranslationView: View {
     }
     
     @ViewBuilder
-    private func fileProcessingView(geometry: GeometryProxy) -> some View {
+    private func fileModeView(geometry: GeometryProxy) -> some View {
         VStack(spacing: 24) {
             if translationController.tasks.isEmpty {
                 dropZone
