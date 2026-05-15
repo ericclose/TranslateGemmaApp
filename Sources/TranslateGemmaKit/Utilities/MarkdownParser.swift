@@ -79,7 +79,7 @@ class MarkdownParser {
         if let first = trimmed.first, "-*+".contains(first) { return true }
         if trimmed.range(of: #"^\d+\."#, options: .regularExpression) != nil { return true }
         if trimmed.hasPrefix(">") { return true }
-        if trimmed.range(of: #"^([-*_])\s*\1\s*\1"#, options: .regularExpression) != nil { return true }
+        if trimmed.range(of: #"^([-*_])(?:\s*\1){2,}\s*$"#, options: .regularExpression) != nil { return true }
         if trimmed.hasPrefix("|") { return true }
         return false
     }
@@ -94,7 +94,7 @@ class MarkdownParser {
         }
         
         // Thematic break
-        if trimmed.range(of: #"^([-*_])\s*\1\s*\1"#, options: .regularExpression) != nil {
+        if trimmed.range(of: #"^([-*_])(?:\s*\1){2,}\s*$"#, options: .regularExpression) != nil {
             chunks.append(.syntax(line + suffix))
             return
         }
@@ -122,37 +122,35 @@ class MarkdownParser {
         }
         
         // Handle Block Syntax prefixes
+        let leadingLineSpaces = line.prefix(while: { $0 == " " || $0 == "\t" })
+        
         if trimmed.hasPrefix("#") {
             let hashPart = trimmed.prefix(while: { $0 == "#" })
             let rest = trimmed.dropFirst(hashPart.count)
-            let leadingSpaces = rest.prefix(while: { $0 == " " })
-            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
-            let prefixStr = String(line.prefix(actualPrefixCount))
+            let trailingSpaces = rest.prefix(while: { $0 == " " })
+            let prefixStr = String(leadingLineSpaces) + String(hashPart) + String(trailingSpaces)
             chunks.append(.syntax(prefixStr))
-            processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
+            processInlineText(String(rest.dropFirst(trailingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if trimmed.hasPrefix(">") {
             let rest = trimmed.dropFirst()
-            let leadingSpaces = rest.prefix(while: { $0 == " " })
-            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
-            let prefixStr = String(line.prefix(actualPrefixCount))
+            let trailingSpaces = rest.prefix(while: { $0 == " " })
+            let prefixStr = String(leadingLineSpaces) + ">" + String(trailingSpaces)
             chunks.append(.syntax(prefixStr))
-            processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
+            processInlineText(String(rest.dropFirst(trailingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if let first = trimmed.first, "-*+".contains(first), trimmed.dropFirst().hasPrefix(" ") {
             let rest = trimmed.dropFirst()
-            let leadingSpaces = rest.prefix(while: { $0 == " " })
-            let actualPrefixCount = line.distance(from: line.startIndex, to: rest.index(rest.startIndex, offsetBy: leadingSpaces.count))
-            let prefixStr = String(line.prefix(actualPrefixCount))
+            let trailingSpaces = rest.prefix(while: { $0 == " " })
+            let prefixStr = String(leadingLineSpaces) + String(first) + String(trailingSpaces)
             chunks.append(.syntax(prefixStr))
-            processInlineText(String(rest.dropFirst(leadingSpaces.count)), into: &chunks)
+            processInlineText(String(rest.dropFirst(trailingSpaces.count)), into: &chunks)
             chunks.append(.syntax(suffix))
         } else if let range = trimmed.range(of: #"^\d+\.\s+"#, options: .regularExpression) {
-            let marker = String(trimmed[range])
-            let actualPrefixCount = line.range(of: marker)!.upperBound
-            let prefixStr = String(line[..<actualPrefixCount])
+            let markerAndSpaces = String(trimmed[range])
+            let prefixStr = String(leadingLineSpaces) + markerAndSpaces
             chunks.append(.syntax(prefixStr))
-            processInlineText(String(line[actualPrefixCount...]), into: &chunks)
+            processInlineText(String(trimmed[range.upperBound...]), into: &chunks)
             chunks.append(.syntax(suffix))
         } else {
             // Paragraph line
