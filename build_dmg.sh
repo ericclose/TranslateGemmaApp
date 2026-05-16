@@ -57,7 +57,7 @@ find .build/checkouts/mlx-swift -name "*.metal" -print0 | xargs -0 -n 1 -P $(sys
         xcrun -sdk macosx metal -c "$FILE" -I .build/checkouts/mlx-swift/Source/Cmlx/mlx/ -o "build/metal_objects/$OBJ_NAME"
     fi
 ' --
-xcrun -sdk macosx metallib build/metal_objects/*.air -o "build/default.metallib"
+xcrun -sdk macosx metal build/metal_objects/*.air -o "build/default.metallib"
 record_step "Metal Kernel Compilation" "$S3_START"
 
 # 4. Copy binary and Resources
