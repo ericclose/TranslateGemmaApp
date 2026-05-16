@@ -117,18 +117,18 @@ public class TranslationService {
         guard let container = modelContainer else { return }
         
         // Performance: Trigger a small generation to warm up the GPU and compile kernels
-        let content: [String: Any] = [
+        let content: [String: Sendable] = [
             "type": "text",
             "source_lang_code": "en",
             "target_lang_code": "zh",
             "text": "hi"
         ]
-        let dummyMessages: [[String: Any]] = [["role": "user", "content": [content]]]
-        let input = try await container.prepare(input: UserInput(messages: dummyMessages))
+        let dummyMessages: [[String: Sendable]] = [["role": "user", "content": [content]]]
         let parameters = GenerateParameters(maxTokens: 1, prefillStepSize: 256)
         
         _ = try await Task.detached(priority: .background) {
-            try await container.generate(input: input, parameters: parameters)
+            let input = try await container.prepare(input: UserInput(messages: dummyMessages as [[String: Any]]))
+            return try await container.generate(input: input, parameters: parameters)
         }.value
     }
     
@@ -207,15 +207,14 @@ public class TranslationService {
         let sLangCode = getLanguageCode(sourceLang) ?? detectLanguageCode(for: text)
         let tLangCode = getLanguageCode(targetLang) ?? "zh"
         
-        let content: [String: Any] = [
+        let content: [String: Sendable] = [
             "type": "text",
             "source_lang_code": sLangCode,
             "target_lang_code": tLangCode,
             "text": text
         ]
         
-        let messages: [[String: Any]] = [["role": "user", "content": [content]]]
-        let input = try await container.prepare(input: UserInput(messages: messages))
+        let messages: [[String: Sendable]] = [["role": "user", "content": [content]]]
         
         var outputText = ""
         var chunkCount = 0        
@@ -240,7 +239,8 @@ public class TranslationService {
         )
         
         let stream = try await Task.detached(priority: .userInitiated) {
-            try await container.generate(input: input, parameters: parameters)
+            let input = try await container.prepare(input: UserInput(messages: messages as [[String: Any]]))
+            return try await container.generate(input: input, parameters: parameters)
         }.value
         
         for try await generation in stream {

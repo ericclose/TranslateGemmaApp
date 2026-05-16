@@ -16,32 +16,14 @@ jobs:
       - name: Set Version
         run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
 
-      - name: Build App
+      - name: Build and Package DMG
         run: |
-          swift build -c release
-          # Packaging logic for macOS app bundle
-          mkdir -p build/TranslateGemmaApp.app/Contents/MacOS
-          cp .build/release/TranslateGemmaApp build/TranslateGemmaApp.app/Contents/MacOS/
-          # In a real scenario, you'd include Info.plist and resources
-
-      - name: Create DMG
-        run: |
-          APP_NAME="TranslateGemmaApp"
-          VERSION=${{ env.VERSION }}
-          ARCH=$(uname -m)
-          DMG_NAME="${APP_NAME}-${ARCH}-v${VERSION}.dmg"
-          
-          # Prepare folder for DMG
-          mkdir -p dmg_root
-          cp -R build/TranslateGemmaApp.app dmg_root/
-          ln -s /Applications dmg_root/Applications
-          
-          hdiutil create -volname "${APP_NAME}" -srcfolder dmg_root -ov -format UDZO "${DMG_NAME}"
-          echo "DMG_PATH=${DMG_NAME}" >> $GITHUB_ENV
+          chmod +x build_dmg.sh
+          ./build_dmg.sh ${{ env.VERSION }}
 
       - name: Release
         uses: softprops/action-gh-release@v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          files: ${{ env.DMG_PATH }}
+          files: TranslateGemmaApp-*-v${{ env.VERSION }}.dmg
