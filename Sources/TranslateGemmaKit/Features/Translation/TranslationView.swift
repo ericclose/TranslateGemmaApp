@@ -205,12 +205,13 @@ public struct TranslationView: View {
                             .strokeBorder(currentAccentColor, style: StrokeStyle(lineWidth: 4, dash: [10, 10]))
                             .padding(40)
                         
-                        VStack(spacing: 20) {
+                        VStack(spacing: 24) {
                             Image(systemName: "doc.on.doc.fill")
-                                .font(.system(size: 60))
+                                .font(.system(size: 72))
                                 .foregroundColor(currentAccentColor)
-                            Text("Drop files to process...")
-                                .font(.system(size: 24, weight: .bold, design: .rounded))
+                                .shadow(color: currentAccentColor.opacity(0.4), radius: 20)
+                            Text("Drop files to process")
+                                .font(.system(size: 28, weight: .black, design: .rounded))
                                 .foregroundColor(.white)
                         }
                     }
@@ -226,14 +227,6 @@ public struct TranslationView: View {
         .alert("Error", isPresented: $showErrorAlert, presenting: errorMessage) { _ in
             Button("OK") { errorMessage = nil }
         } message: { message in Text(message) }
-        .alert("Stop Translation", isPresented: $showStopConfirmation) {
-            Button("Cancel", role: .cancel) { }
-            Button("Stop", role: .destructive) {
-                cancelTranslation()
-            }
-        } message: {
-            Text("Are you sure you want to stop the current translation process? Unsaved progress will be lost.")
-        }
         .onAppear {
             initializeModel()
         }
@@ -271,6 +264,27 @@ public struct TranslationView: View {
                 }
             }
         }
+        .overlay(
+            Group {
+                if showStopConfirmation {
+                    CustomConfirmationDialog(
+                        title: mode == .plainText ? "Stop Translation" : "Stop Processing",
+                        message: "Are you sure you want to stop the current process? Unsaved progress will be lost.",
+                        confirmTitle: "Stop",
+                        style: .destructive,
+                        onConfirm: {
+                            withAnimation {
+                                cancelTranslation()
+                                showStopConfirmation = false
+                            }
+                        },
+                        onCancel: {
+                            withAnimation { showStopConfirmation = false }
+                        }
+                    )
+                }
+            }
+        )
     }
     
     // MARK: - Layout Views
@@ -314,54 +328,83 @@ public struct TranslationView: View {
             } else {
                 VStack(alignment: .leading, spacing: 16) {
                     HStack {
-                        Text("Task Queue")
-                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Task Queue")
+                                .font(.system(size: 22, weight: .black, design: .rounded))
+                            Text("\(translationController.tasks.count) files in queue")
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundColor(.secondary)
+                        }
+                        
                         Spacer()
                         
-                        Button(action: importBatchFiles) {
-                            HStack(spacing: 4) {
-                                Image(systemName: "plus")
-                                Text("Add Files")
+                        HStack(spacing: 12) {
+                            Button(action: importBatchFiles) {
+                                HStack(spacing: 6) {
+                                    Image(systemName: "plus.circle.fill")
+                                    Text("Add Files")
+                                }
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 7)
+                                .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5) })
                             }
-                            .font(.system(size: 12, weight: .medium))
-                        }
-                        .buttonStyle(.plain)
-                        .foregroundColor(currentAccentColor)
-                        
-                        Text("•")
-                            .foregroundColor(.secondary.opacity(0.5))
+                            .buttonStyle(.plain)
+                            .foregroundColor(currentAccentColor)
                             
-                        Button(action: { withAnimation { translationController.clearTasks() } }) {
-                            Text("Clear All").font(.system(size: 12, weight: .medium))
+                            Button(action: { withAnimation { translationController.clearTasks() } }) {
+                                Text("Clear All")
+                                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 7)
+                                    .background(ZStack { Capsule().fill(.ultraThinMaterial); Capsule().strokeBorder(.white.opacity(0.1), lineWidth: 0.5) })
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundColor(.secondary)
                         }
-                        .buttonStyle(.plain)
-                        .foregroundColor(.secondary)
                     }
-                    .padding(.horizontal, 10)
+                    .padding(.horizontal, 8)
                     
                     ScrollView {
                         VStack(spacing: 12) {
                             ForEach($translationController.tasks) { $task in
-                                TaskCard(task: $task, accentColor: currentAccentColor) {
-                                    translationController.removeTask(task)
+                                TaskCard(task: $task, accentColor: currentAccentColor, onReveal: { url in
+                                    translationController.revealInFinder(outputURL: url)
+                                }) {
+                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                        translationController.removeTask(task)
+                                    }
                                 }
                             }
                         }
                         .padding(4)
                     }
                     
-                    HStack(spacing: 8) {
-                        Image(systemName: "folder.badge.plus")
-                        Text(translationController.exportDirectory != nil ? "Saving to: \(translationController.exportDirectory!.lastPathComponent)" : "Saving to: Original Directory")
-                            .font(.system(size: 11, weight: .medium))
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle().fill(currentAccentColor.opacity(0.1))
+                                .frame(width: 32, height: 32)
+                            Image(systemName: "folder.badge.plus")
+                                .font(.system(size: 14))
+                                .foregroundColor(currentAccentColor)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text("Export Location")
+                                .font(.system(size: 10, weight: .bold, design: .rounded))
+                                .foregroundColor(.secondary)
+                            Text(translationController.exportDirectory != nil ? translationController.exportDirectory!.lastPathComponent : "Original Directory")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.primary.opacity(0.8))
+                        }
                         
                         Spacer()
                         
                         Button(action: selectExportDirectory) {
-                            Text(translationController.exportDirectory != nil ? "Change..." : "Set Export Folder...")
-                                .font(.system(size: 11, weight: .bold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 4)
+                            Text(translationController.exportDirectory != nil ? "Change Folder" : "Set Export Folder")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 7)
                                 .background(Capsule().fill(currentAccentColor.opacity(0.1)))
                         }
                         .buttonStyle(.plain)
@@ -369,23 +412,23 @@ public struct TranslationView: View {
                         
                         if translationController.exportDirectory != nil {
                             Button(action: { withAnimation { translationController.exportDirectory = nil } }) {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundColor(.secondary.opacity(0.5))
+                                Image(systemName: "arrow.counterclockwise.circle.fill")
+                                    .font(.system(size: 18))
+                                    .foregroundColor(.secondary.opacity(0.4))
                             }
                             .buttonStyle(.plain)
                         }
                     }
-                    .foregroundColor(.secondary)
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(.white.opacity(0.03)))
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(.white.opacity(0.04)))
                     .padding(.top, 4)
                 }
                 .padding(30)
                 .background(
-                    RoundedRectangle(cornerRadius: 24)
+                    RoundedRectangle(cornerRadius: 32, style: .continuous)
                         .fill(.ultraThinMaterial)
-                        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(.white.opacity(0.1), lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: 32, style: .continuous).strokeBorder(.white.opacity(0.1), lineWidth: 1))
                 )
             }
         }
@@ -397,40 +440,45 @@ public struct TranslationView: View {
     @ViewBuilder
     private var dropZone: some View {
         Button(action: importBatchFiles) {
-            VStack(spacing: 24) {
+            VStack(spacing: 32) {
                 ZStack {
                     Circle()
-                        .fill(currentAccentColor.opacity(0.1))
-                        .frame(width: 120, height: 120)
+                        .fill(currentAccentColor.opacity(0.08))
+                        .frame(width: 160, height: 160)
                     
-                    Image(systemName: "doc.on.doc")
-                        .font(.system(size: 48))
+                    Image(systemName: "doc.on.doc.fill")
+                        .font(.system(size: 64))
                         .foregroundColor(currentAccentColor)
+                        .shadow(color: currentAccentColor.opacity(0.3), radius: 25)
                 }
                 
-                VStack(spacing: 8) {
-                    Text("Drop Subtitle or Markdown Files")
-                        .font(.system(size: 20, weight: .bold, design: .rounded))
-                    Text("Supports SRT, VTT, ASS, and Markdown")
-                        .font(.system(size: 14))
+                VStack(spacing: 10) {
+                    Text("Batch Translation")
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                    Text("Drop Subtitle or Markdown files here")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.secondary)
                 }
                 
-                Text("Browse Files")
-                    .font(.system(size: 14, weight: .bold, design: .rounded))
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(currentAccentColor))
-                    .foregroundColor(.white)
+                HStack(spacing: 10) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("Select Files")
+                }
+                .font(.system(size: 15, weight: .bold, design: .rounded))
+                .padding(.horizontal, 36)
+                .padding(.vertical, 14)
+                .background(Capsule().fill(currentAccentColor))
+                .foregroundColor(.white)
+                .shadow(color: currentAccentColor.opacity(0.3), radius: 15, x: 0, y: 8)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .background(
-            RoundedRectangle(cornerRadius: 32)
-                .strokeBorder(currentAccentColor.opacity(0.3), style: StrokeStyle(lineWidth: 2, dash: [8, 8]))
-                .background(RoundedRectangle(cornerRadius: 32).fill(currentAccentColor.opacity(0.02)))
+            RoundedRectangle(cornerRadius: 48, style: .continuous)
+                .strokeBorder(currentAccentColor.opacity(0.2), style: StrokeStyle(lineWidth: 2, dash: [12, 12]))
+                .background(RoundedRectangle(cornerRadius: 48, style: .continuous).fill(currentAccentColor.opacity(0.02)))
         )
     }
 
@@ -584,17 +632,34 @@ public struct TranslationView: View {
         return String(format: "%02d:%02d", minutes, seconds)
     }
     
+    private var isBatchFinished: Bool {
+        !translationController.isBatchProcessing && 
+        !translationController.tasks.isEmpty && 
+        translationController.tasks.allSatisfy { 
+            if case .completed = $0.status { return true }
+            if case .failed = $0.status { return true }
+            return false
+        }
+    }
+
     @ViewBuilder
     private var startBatchButton: some View {
         Button(action: {
-            if translationController.isBatchProcessing {
+            if isBatchFinished {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    translationController.clearTasks()
+                }
+            } else if translationController.isBatchProcessing {
                 showStopConfirmation = true
             } else {
                 startBatchAction()
             }
         }) {
             HStack(spacing: 12) {
-                if translationController.isBatchProcessing {
+                if isBatchFinished {
+                    Image(systemName: "checkmark.circle.fill").font(.system(size: 18))
+                    Text("Finish").font(.system(size: 18, weight: .bold, design: .rounded))
+                } else if translationController.isBatchProcessing {
                     Image(systemName: "stop.circle.fill").font(.system(size: 18))
                     Text("Stop Processing").font(.system(size: 18, weight: .bold, design: .rounded))
                 } else {
@@ -603,9 +668,9 @@ public struct TranslationView: View {
                 }
             }
             .frame(width: 240, height: 56)
-            .background(Capsule().fill(translationController.isBatchProcessing ? .red : currentAccentColor))
+            .background(Capsule().fill(isBatchFinished ? Color.green : (translationController.isBatchProcessing ? Color.red : currentAccentColor)))
             .foregroundColor(.white)
-            .shadow(color: (translationController.isBatchProcessing ? Color.red : currentAccentColor).opacity(0.3), radius: 15, x: 0, y: 8)
+            .shadow(color: (isBatchFinished ? Color.green : (translationController.isBatchProcessing ? Color.red : currentAccentColor)).opacity(0.3), radius: 15, x: 0, y: 8)
         }
         .buttonStyle(.plain)
     }
@@ -834,129 +899,217 @@ struct ModeSwitcher: View {
 struct TaskCard: View {
     @Binding var task: TranslationTask
     let accentColor: Color
+    let onReveal: (URL) -> Void
     let onRemove: () -> Void
+    
+    @State private var isHovered = false
+    @Environment(\.colorScheme) var colorScheme
+    
+    private var fileIcon: String {
+        let ext = task.sourceURL.pathExtension.lowercased()
+        switch ext {
+        case "srt", "vtt", "ass": return "captions.bubble.fill"
+        case "md", "markdown": return "doc.markup.fill"
+        case "txt": return "doc.text.fill"
+        default: return "doc.fill"
+        }
+    }
     
     var body: some View {
         HStack(spacing: 16) {
             // File Icon
             ZStack {
-                RoundedRectangle(cornerRadius: 12).fill(accentColor.opacity(0.1))
-                Image(systemName: "doc.text.fill").foregroundColor(accentColor).font(.system(size: 16))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(accentColor.opacity(0.12))
+                Image(systemName: fileIcon)
+                    .foregroundColor(accentColor)
+                    .font(.system(size: 18))
             }
-            .frame(width: 40, height: 40)
+            .frame(width: 44, height: 44)
             
             // Name & Size
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(task.fileName)
                     .font(.system(size: 14, weight: .bold, design: .rounded))
                     .lineLimit(1)
                 Text(ByteCountFormatter().string(fromByteCount: task.fileSize))
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.secondary.opacity(0.8))
             }
-            .frame(width: 160, alignment: .leading)
+            .frame(width: 180, alignment: .leading)
             
-            Divider().frame(height: 20)
+            Divider()
+                .frame(height: 24)
+                .opacity(0.3)
             
             // Language Settings
-            if case .pending = task.status {
-                HStack(spacing: 6) {
-                    Text(task.sourceLang ?? "Auto")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 40, alignment: .leading)
-                    
-                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
-                    
+            HStack(spacing: 8) {
+                Text(task.sourceLang ?? "Auto")
+                    .font(.system(size: 11, weight: .bold, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(.primary.opacity(0.05)))
+                
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(.secondary.opacity(0.4))
+                
+                if case .pending = task.status {
                     Menu {
                         ForEach(LanguageManager.supportedLanguages, id: \.self) { lang in
-                            Button(lang) { task.targetLang = lang }
+                            Button(lang) { 
+                                withAnimation(.spring(response: 0.3)) {
+                                    task.targetLang = lang 
+                                }
+                            }
                         }
                     } label: {
-                        Text(task.targetLang)
-                            .font(.system(size: 11, weight: .semibold))
-                            .lineLimit(1)
+                        HStack(spacing: 4) {
+                            Text(task.targetLang)
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.system(size: 8))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(accentColor.opacity(0.1)))
+                        .foregroundColor(accentColor)
                     }
                     .menuStyle(.borderlessButton)
-                    .frame(width: 100)
-                }
-            } else {
-                HStack(spacing: 6) {
-                    Text(task.sourceLang ?? "Auto")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(.secondary)
-                        .frame(width: 40, alignment: .leading)
-                    Image(systemName: "arrow.right").font(.system(size: 10)).foregroundColor(.secondary.opacity(0.5))
+                    .fixedSize()
+                } else {
                     Text(task.targetLang)
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
                         .foregroundColor(accentColor)
-                        .frame(width: 100, alignment: .leading)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(accentColor.opacity(0.1)))
                 }
             }
             
             Spacer()
             
-            // Progress / Status / Metrics
-            if case .processing = task.status {
-                VStack(alignment: .trailing, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(String(format: "%.1f tok/s", task.tokensPerSecond))
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(accentColor)
-                        if let eta = task.estimatedTimeRemaining, eta > 0 {
-                            Text(formatETA(eta))
-                                .font(.system(size: 11, weight: .medium, design: .monospaced))
-                                .foregroundColor(.secondary)
+            // Progress / Status
+            Group {
+                switch task.status {
+                case .pending:
+                    Text("Ready")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.secondary.opacity(0.6))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Capsule().strokeBorder(.secondary.opacity(0.2), lineWidth: 1))
+                    
+                case .processing:
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(String(format: "%.1f tok/s", task.tokensPerSecond))
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(accentColor)
+                            if let eta = task.estimatedTimeRemaining, eta > 0 {
+                                Text(formatETA(eta))
+                                    .font(.system(size: 10, weight: .medium, design: .monospaced))
+                                    .foregroundColor(.secondary)
+                            }
                         }
+                        ProgressView()
+                            .controlSize(.small)
+                            .tint(accentColor)
+                            .frame(width: 100)
                     }
-                    ProgressView()
-                        .controlSize(.small)
-                        .tint(accentColor)
-                }
-                .frame(width: 150, alignment: .trailing)
-            } else if case .completed(let url) = task.status {
-                HStack(spacing: 12) {
-                    Text("Completed").font(.system(size: 12, weight: .bold)).foregroundColor(.green)
-                    Button(action: { NSWorkspace.shared.activateFileViewerSelecting([url]) }) {
-                        Image(systemName: "folder.fill").foregroundColor(.green)
+                    
+                case .completed(let url):
+                    HStack(spacing: 12) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "checkmark.circle.fill")
+                            Text("Done")
+                        }
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+                        .foregroundColor(.green)
+                        
+                        Button(action: { onReveal(url) }) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.green)
+                                .padding(6)
+                                .background(Circle().fill(.green.opacity(0.1)))
+                        }
+                        .buttonStyle(.plain)
+                        .help("Reveal in Finder")
                     }
-                    .buttonStyle(.plain)
-                    .help("Show in Finder")
+                    
+                case .failed(let error):
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.octagon.fill")
+                            .foregroundColor(.red)
+                        Text(error)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(.red)
+                            .lineLimit(1)
+                            .frame(maxWidth: 120)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(Capsule().fill(Color.red.opacity(0.1)))
                 }
-            } else if case .failed(let error) = task.status {
-                HStack {
-                    Image(systemName: "exclamationmark.triangle.fill").foregroundColor(.red)
-                    Text(error).font(.system(size: 10)).foregroundColor(.red).lineLimit(1).frame(maxWidth: 100)
-                }
-            } else {
-                Text("Waiting...")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.secondary)
             }
+            .frame(width: 160, alignment: .trailing)
             
+            // Remove / Cancel Button
             if case .processing = task.status {
-                // Cannot remove while processing
-                Image(systemName: "xmark").font(.system(size: 10, weight: .bold)).foregroundColor(.clear)
-            } else {
-                Button(action: onRemove) {
-                    Image(systemName: "xmark").font(.system(size: 10, weight: .bold))
+                Button(action: { 
+                    withAnimation {
+                        task.isCancelled = true 
+                    }
+                }) {
+                    Image(systemName: "stop.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.red.opacity(0.8))
                 }
                 .buttonStyle(.plain)
-                .foregroundColor(.secondary.opacity(0.5))
+                .help("Cancel this file")
+            } else {
+                Button(action: onRemove) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundColor(.secondary.opacity(0.3))
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    if hovering {
+                        NSCursor.pointingHand.set()
+                    } else {
+                        NSCursor.arrow.set()
+                    }
+                }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 16).fill(.white.opacity(0.05)))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .strokeBorder(
-                    task.status == .pending ? Color.white.opacity(0.1) : (
-                        task.status == .processing ? accentColor.opacity(0.3) : Color.clear
-                    ),
-                    lineWidth: 1
-                )
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(
+                        LinearGradient(
+                            colors: [
+                                .white.opacity(colorScheme == .dark ? 0.1 : 0.4),
+                                .white.opacity(colorScheme == .dark ? 0.05 : 0.1)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            }
         )
+        .shadow(color: Color.black.opacity(isHovered ? 0.1 : 0.04), radius: isHovered ? 15 : 10, x: 0, y: isHovered ? 8 : 4)
+        .scaleEffect(isHovered ? 1.01 : 1.0)
+        .onHover { isHovered = $0 }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isHovered)
     }
     
     private func formatETA(_ time: TimeInterval?) -> String {

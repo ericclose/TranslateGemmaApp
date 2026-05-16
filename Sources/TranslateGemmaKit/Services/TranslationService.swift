@@ -130,7 +130,7 @@ public class TranslationService {
         }.value
     }
     
-    public func translate(text: String, sourceLang: String?, targetLang: String, onChunk: ((String) -> Void)? = nil) async throws -> String {
+    public func translate(text: String, sourceLang: String?, targetLang: String, onChunk: ((String) throws -> Void)? = nil) async throws -> String {
         recordActivity()
         self.isTranslating = true
         if !isBatchSessionActive {
@@ -178,7 +178,7 @@ public class TranslationService {
             fullOutput += chunkOutput + chunk.separator
             
             if !chunk.separator.isEmpty {
-                onChunk?(chunk.separator)
+                try onChunk?(chunk.separator)
             }
         }
         
@@ -197,6 +197,14 @@ public class TranslationService {
         self.isTranslating = true
     }
     
+    public func reduceEstimatedTokens(_ amount: Int) {
+        self.globalEstimatedTokens = max(self.globalTokenCount + 10, self.globalEstimatedTokens - amount)
+    }
+    
+    public func increaseEstimatedTokens(_ amount: Int) {
+        self.globalEstimatedTokens += amount
+    }
+    
     public func endBatchSession() {
         self.isBatchSessionActive = false
         self.isTranslating = false
@@ -213,7 +221,7 @@ public class TranslationService {
         MLX.Memory.clearCache()
     }
     
-    private func translateChunk(text: String, sourceLang: String?, targetLang: String, container: ModelContainer, onChunk: ((String) -> Void)?) async throws -> String {
+    private func translateChunk(text: String, sourceLang: String?, targetLang: String, container: ModelContainer, onChunk: ((String) throws -> Void)?) async throws -> String {
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text
         }
@@ -270,16 +278,20 @@ public class TranslationService {
                     let lastUpdate = self.lastMetricsUpdateTime ?? startTime
                     
                     if now.timeIntervalSince(lastUpdate) >= 1.0 {
-                        self.tokensPerSecond = Double(self.globalTokenCount) / elapsed
+                        // Smoothing: Calculate speed based on recent performance (EMA or Windowed)
+                        // For simplicity, we use the total tokens / elapsed, but we could make it more sensitive
+                        let currentTokensPerSecond = Double(self.globalTokenCount) / elapsed
                         
-                        // Dynamically expand estimated tokens if we exceeded the initial estimate
-                        if self.globalTokenCount >= self.globalEstimatedTokens {
-                            self.globalEstimatedTokens = self.globalTokenCount + 20
+                        // Apply a simple smoothing factor to avoid erratic jumps
+                        if self.tokensPerSecond == 0 {
+                            self.tokensPerSecond = currentTokensPerSecond
+                        } else {
+                            self.tokensPerSecond = (self.tokensPerSecond * 0.7) + (currentTokensPerSecond * 0.3)
                         }
                         
                         let remainingTokens = max(0, self.globalEstimatedTokens - self.globalTokenCount)
                         if self.tokensPerSecond > 0 {
-                            self.estimatedTimeRemaining = Double(remainingTokens) / self.tokensPerSecond
+                            self.estimatedTimeRemaining = (Double(remainingTokens) / self.tokensPerSecond) + 0.5
                         }
                         self.lastMetricsUpdateTime = now
                     }
@@ -288,7 +300,7 @@ public class TranslationService {
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                 if stopSequences.contains(where: { genText.contains($0) }) { break }
                 outputText += genText
-                onChunk?(genText)
+                try onChunk?(genText)
                 if outputText.count > 20000 { break }
             }
         }

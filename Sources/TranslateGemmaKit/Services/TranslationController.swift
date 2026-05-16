@@ -1,9 +1,15 @@
 import Foundation
 import SwiftUI
 import Observation
+import MLX
+import AppKit
 
 @Observable
 public class TranslationController {
+    public func revealInFinder(outputURL: URL) {
+        NSWorkspace.shared.activateFileViewerSelecting([outputURL])
+    }
+    
     public var tasks: [TranslationTask] = []
     public var isBatchProcessing = false
     public var exportDirectory: URL? = nil
@@ -18,7 +24,9 @@ public class TranslationController {
     public func addFiles(_ urls: [URL], defaultTargetLang: String) {
         for url in urls {
             if !tasks.contains(where: { $0.sourceURL == url }) {
-                tasks.append(TranslationTask(sourceURL: url, targetLang: defaultTargetLang))
+                var task = TranslationTask(sourceURL: url, targetLang: defaultTargetLang)
+                task.translatableSize = estimateTranslatableSize(for: url)
+                tasks.append(task)
             }
         }
     }
@@ -37,6 +45,25 @@ public class TranslationController {
     
     public func removeTask(_ task: TranslationTask) {
         tasks.removeAll(where: { $0.id == task.id })
+    }
+    
+    private func estimateTranslatableSize(for url: URL) -> Int64 {
+        guard let content = try? String(contentsOf: url) else { return 0 }
+        let ext = url.pathExtension.lowercased()
+        
+        switch ext {
+        case "srt":
+            return Int64(srtParser.parse(content: content).map { $0.text.count }.reduce(0, +))
+        case "vtt":
+            return Int64(vttParser.parse(content: content).map { $0.text.count }.reduce(0, +))
+        case "ass":
+            return Int64(assParser.parse(content: content).map { $0.text.count }.reduce(0, +))
+        case "md", "markdown":
+            let chunks = mdParser.parseForTranslation(content: content)
+            return Int64(chunks.compactMap { if case .text(let t, _) = $0 { return t.count }; return nil }.reduce(0, +))
+        default:
+            return Int64(content.count)
+        }
     }
     
     public func processFile(url: URL, sourceLang: String?, targetLang: String, onProgress: ((Int, Int) -> Void)? = nil, translator: (String) async throws -> String) async throws -> String {
@@ -102,12 +129,19 @@ public class TranslationController {
         isBatchProcessing = true
         defer { isBatchProcessing = false }
         
-        let totalPendingSize = tasks.filter { $0.status == .pending }.map { $0.fileSize }.reduce(0, +)
-        translationService.startBatchSession(estimatedTokens: Int(totalPendingSize / 2))
+        let totalTranslatableSize = tasks.filter { $0.status == .pending }.map { $0.translatableSize }.reduce(0, +)
+        // Use a dynamic multiplier based on the most common target language in the batch
+        let firstTask = tasks.first(where: { $0.status == .pending })
+        let defaultMultiplier = getTokenMultiplier(source: firstTask?.sourceLang, target: firstTask?.targetLang ?? "English")
+        translationService.startBatchSession(estimatedTokens: Int(Double(totalTranslatableSize) * defaultMultiplier))
         defer { translationService.endBatchSession() }
         
         for i in 0..<tasks.count {
             guard tasks[i].status == .pending else { continue }
+            if tasks[i].isCancelled {
+                tasks[i].status = .failed("Cancelled")
+                continue
+            }
             
             try? Task.checkCancellation()
             if Task.isCancelled { break }
@@ -117,9 +151,9 @@ public class TranslationController {
             let targetLang = tasks[i].targetLang
             let outputURL = generateOutputURL(for: url, targetLang: targetLang)
             
-            let estimatedFileTokens = Int(tasks[i].fileSize / 2)
+            let multiplier = getTokenMultiplier(source: sourceLang, target: targetLang)
+            let estimatedFileTokens = Int(Double(tasks[i].translatableSize) * multiplier)
             var currentFileTokens = 0
-            let fileStartTime = Date()
             var lastFileUpdate = Date()
             
             tasks[i].status = .processing
@@ -146,18 +180,27 @@ public class TranslationController {
                     if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         return text
                     }
+                    if self.tasks[i].isCancelled { throw CancellationError() }
+                    
                     let resultText = try await translationService.translate(text: text, sourceLang: sourceLang, targetLang: targetLang) { chunk in
+                        if self.tasks[i].isCancelled { 
+                             throw CancellationError()
+                        }
+                        
                         currentFileTokens += 1
                         
+                        // Proactively expand total estimate if this file exceeds its prediction
+                        if currentFileTokens > estimatedFileTokens {
+                            translationService.increaseEstimatedTokens(1)
+                        }
+                        
                         let now = Date()
-                        if now.timeIntervalSince(lastFileUpdate) >= 1.0 {
-                            let elapsed = now.timeIntervalSince(fileStartTime)
-                            if elapsed > 0 {
-                                self.tasks[i].tokensPerSecond = Double(currentFileTokens) / elapsed
-                                let remaining = max(0, estimatedFileTokens - currentFileTokens)
-                                if self.tasks[i].tokensPerSecond > 0 {
-                                    self.tasks[i].estimatedTimeRemaining = Double(remaining) / self.tasks[i].tokensPerSecond
-                                }
+                        if now.timeIntervalSince(lastFileUpdate) >= 0.5 {
+                            // Sync with service speed for consistency
+                            self.tasks[i].tokensPerSecond = translationService.tokensPerSecond
+                            let remaining = max(0, estimatedFileTokens - currentFileTokens)
+                            if self.tasks[i].tokensPerSecond > 0 {
+                                self.tasks[i].estimatedTimeRemaining = (Double(remaining) / self.tasks[i].tokensPerSecond) + 0.5
                             }
                             lastFileUpdate = now
                         }
@@ -168,11 +211,29 @@ public class TranslationController {
                 print("--- DEBUG: Writing result for \(url.lastPathComponent) (\(result.count) chars) to \(outputURL.lastPathComponent) ---")
                 try result.write(to: outputURL, atomically: true, encoding: .utf8)
                 tasks[i].status = .completed(outputURL: outputURL)
+                
+                // If we finished much faster/slower than estimated tokens, adjust global estimate
+                let remainingEstimateForThisFile = max(0, estimatedFileTokens - currentFileTokens)
+                if remainingEstimateForThisFile > 0 {
+                    translationService.reduceEstimatedTokens(remainingEstimateForThisFile)
+                }
+                
+                // Performance: Clear cache between files to prevent memory buildup
+                MLX.Memory.clearCache()
             } catch is CancellationError {
                 tasks[i].status = .failed("Cancelled")
-                break
+                let remainingEstimateForThisFile = max(0, estimatedFileTokens - currentFileTokens)
+                translationService.reduceEstimatedTokens(remainingEstimateForThisFile)
+                
+                if Task.isCancelled {
+                    break
+                } else {
+                    continue
+                }
             } catch {
                 tasks[i].status = .failed(error.localizedDescription)
+                let remainingEstimateForThisFile = max(0, estimatedFileTokens - currentFileTokens)
+                translationService.reduceEstimatedTokens(remainingEstimateForThisFile)
             }
         }
     }
@@ -198,6 +259,27 @@ public class TranslationController {
         
         return outputURL
     }
+    
+    private func getTokenMultiplier(source: String?, target: String) -> Double {
+        let sCode = LanguageManager.getShortCode(for: source ?? "English").lowercased()
+        let tCode = LanguageManager.getShortCode(for: target).lowercased()
+        
+        // 1. Beta: Input Chars to Input Tokens (Gemma 3 specific)
+        let beta: Double
+        if sCode.contains("zh") { beta = 0.65 }
+        else if sCode.contains("ja") || sCode.contains("ko") { beta = 0.55 }
+        else { beta = 0.25 } // English/Latin
+        
+        // 2. Alpha: Input Tokens to Output Tokens expansion
+        var alpha: Double = 1.1 // Default
+        
+        if sCode.contains("en") && tCode.contains("zh") { alpha = 0.75 }
+        else if sCode.contains("zh") && tCode.contains("en") { alpha = 1.35 }
+        else if sCode.contains("en") && (tCode.contains("ja") || tCode.contains("ko")) { alpha = 1.25 }
+        else if sCode.contains("zh") && (tCode.contains("ja") || tCode.contains("ko")) { alpha = 1.15 }
+        
+        return beta * alpha
+    }
 }
 
 public struct TranslationTask: Identifiable, Equatable {
@@ -207,6 +289,7 @@ public struct TranslationTask: Identifiable, Equatable {
     
     public var sourceLang: String? = nil
     public var targetLang: String
+    public var isCancelled: Bool = false
     
     public var tokensPerSecond: Double = 0
     public var estimatedTimeRemaining: TimeInterval? = nil
@@ -214,6 +297,13 @@ public struct TranslationTask: Identifiable, Equatable {
     public var fileName: String { sourceURL.lastPathComponent }
     public var fileSize: Int64 {
         (try? FileManager.default.attributesOfItem(atPath: sourceURL.path)[.size] as? Int64) ?? 0
+    }
+    public var translatableSize: Int64 = 0
+    
+    public init(sourceURL: URL, targetLang: String) {
+        self.sourceURL = sourceURL
+        self.targetLang = targetLang
+        self.translatableSize = fileSize // Default to fileSize
     }
     
     public static func == (lhs: TranslationTask, rhs: TranslationTask) -> Bool {
