@@ -170,6 +170,7 @@ public struct TranslationView: View {
         .frame(minWidth: 1000, minHeight: 700)
         .navigationTitle("TranslateGemma")
         .onDrop(of: [.fileURL], isTargeted: $isDraggingOver) { providers in
+            guard !translationController.isBatchProcessing else { return false }
             Task {
                 var urls: [URL] = []
                 for provider in providers {
@@ -351,6 +352,8 @@ public struct TranslationView: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(currentAccentColor)
+                            .opacity(translationController.isBatchProcessing ? 0.5 : 1.0)
+                            .disabled(translationController.isBatchProcessing)
                             
                             Button(action: { withAnimation { translationController.clearTasks() } }) {
                                 Text("Clear All")
@@ -361,6 +364,8 @@ public struct TranslationView: View {
                             }
                             .buttonStyle(.plain)
                             .foregroundColor(.secondary)
+                            .opacity(translationController.isBatchProcessing ? 0.5 : 1.0)
+                            .disabled(translationController.isBatchProcessing)
                         }
                     }
                     .padding(.horizontal, 8)
@@ -409,6 +414,8 @@ public struct TranslationView: View {
                         }
                         .buttonStyle(.plain)
                         .foregroundColor(currentAccentColor)
+                        .opacity(translationController.isBatchProcessing ? 0.5 : 1.0)
+                        .disabled(translationController.isBatchProcessing)
                         
                         if translationController.exportDirectory != nil {
                             Button(action: { withAnimation { translationController.exportDirectory = nil } }) {
