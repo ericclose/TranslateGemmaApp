@@ -117,7 +117,13 @@ public class TranslationService {
         guard let container = modelContainer else { return }
         
         // Performance: Trigger a small generation to warm up the GPU and compile kernels
-        let dummyMessages: [[String: Any]] = [["role": "user", "content": "hi"]]
+        let content: [String: Any] = [
+            "type": "text",
+            "source_lang_code": "en",
+            "target_lang_code": "zh",
+            "text": "hi"
+        ]
+        let dummyMessages: [[String: Any]] = [["role": "user", "content": [content]]]
         let input = try await container.prepare(input: UserInput(messages: dummyMessages))
         let parameters = GenerateParameters(maxTokens: 1, prefillStepSize: 256)
         

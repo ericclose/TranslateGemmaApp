@@ -21,10 +21,20 @@ public class TranslationController {
     
     public init() {}
     
-    public func addFiles(_ urls: [URL], defaultTargetLang: String) {
+    public func addFiles(_ urls: [URL], sourceLang: String?, targetLang: String) {
+        let supportedExtensions = ["srt", "vtt", "ass", "md", "markdown", "txt"]
         for url in urls {
+            let fileName = url.lastPathComponent
+            let ext = url.pathExtension.lowercased()
+            
+            // Ignore hidden files (like .DS_Store) and unsupported extensions
+            guard !fileName.hasPrefix("."), supportedExtensions.contains(ext) else {
+                continue
+            }
+            
             if !tasks.contains(where: { $0.sourceURL == url }) {
-                var task = TranslationTask(sourceURL: url, targetLang: defaultTargetLang)
+                var task = TranslationTask(sourceURL: url, targetLang: targetLang)
+                task.sourceLang = sourceLang
                 task.translatableSize = estimateTranslatableSize(for: url)
                 tasks.append(task)
             }
@@ -45,6 +55,18 @@ public class TranslationController {
     
     public func removeTask(_ task: TranslationTask) {
         tasks.removeAll(where: { $0.id == task.id })
+    }
+    
+    public func removeTasks(ids: Set<UUID>) {
+        tasks.removeAll(where: { ids.contains($0.id) })
+    }
+    
+    public func updateTargetLanguageForTasks(ids: Set<UUID>, to lang: String) {
+        for i in 0..<tasks.count {
+            if ids.contains(tasks[i].id) && tasks[i].status == .pending {
+                tasks[i].targetLang = lang
+            }
+        }
     }
     
     private func estimateTranslatableSize(for url: URL) -> Int64 {
@@ -71,32 +93,14 @@ public class TranslationController {
         let ext = url.pathExtension.lowercased()
         
         switch ext {
-        case "srt":
-            var paragraphs = srtParser.parse(content: content)
-            let total = paragraphs.count
-            for i in 0..<total {
-                onProgress?(i + 1, total)
-                paragraphs[i].text = try await translator(paragraphs[i].text)
+        case "srt", "vtt", "ass":
+            let parser: SubtitleParser = switch ext {
+                case "srt": srtParser
+                case "vtt": vttParser
+                case "ass": assParser
+                default: fatalError("Unreachable")
             }
-            return srtParser.write(paragraphs: paragraphs)
-            
-        case "vtt":
-            var paragraphs = vttParser.parse(content: content)
-            let total = paragraphs.count
-            for i in 0..<total {
-                onProgress?(i + 1, total)
-                paragraphs[i].text = try await translator(paragraphs[i].text)
-            }
-            return vttParser.write(paragraphs: paragraphs)
-            
-        case "ass":
-            var paragraphs = assParser.parse(content: content)
-            let total = paragraphs.count
-            for i in 0..<total {
-                onProgress?(i + 1, total)
-                paragraphs[i].text = try await translator(paragraphs[i].text)
-            }
-            return assParser.write(paragraphs: paragraphs)
+            return try await processSubtitle(content: content, parser: parser, onProgress: onProgress, translator: translator)
             
         case "md", "markdown":
             let chunks = mdParser.parseForTranslation(content: content)
@@ -122,6 +126,18 @@ public class TranslationController {
             onProgress?(1, 1)
             return result
         }
+    }
+
+    private func processSubtitle(content: String, parser: SubtitleParser, onProgress: ((Int, Int) -> Void)?, translator: (String) async throws -> String) async throws -> String {
+        var paragraphs = parser.parse(content: content)
+        let total = paragraphs.count
+        for i in 0..<total {
+            onProgress?(i + 1, total)
+            if !paragraphs[i].text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                paragraphs[i].text = try await translator(paragraphs[i].text)
+            }
+        }
+        return parser.write(paragraphs: paragraphs)
     }
     
     @MainActor
