@@ -15,14 +15,10 @@ import os
 public class TranslationService {
     public var isTranslating = false
     public var progress: Double = 0
-    public var tokensPerSecond: Double = 0
-    public var estimatedTimeRemaining: TimeInterval? = nil
     public var totalTimeTaken: TimeInterval? = nil
     
     private var globalStartTime: Date?
     private var globalTokenCount: Int = 0
-    private var globalEstimatedTokens: Int = 0
-    private var lastMetricsUpdateTime: Date? = nil
     
     private var isBatchSessionActive: Bool = false
     
@@ -134,13 +130,9 @@ public class TranslationService {
         recordActivity()
         self.isTranslating = true
         if !isBatchSessionActive {
-            self.tokensPerSecond = 0
-            self.estimatedTimeRemaining = nil
             self.totalTimeTaken = nil
             self.globalStartTime = Date()
             self.globalTokenCount = 0
-            self.globalEstimatedTokens = max(text.count / 2, 50)
-            self.lastMetricsUpdateTime = nil
         }
         
         // Maximize system resource scheduling during translation
@@ -153,10 +145,6 @@ public class TranslationService {
                 if let startTime = self.globalStartTime {
                     let totalElapsed = Date().timeIntervalSince(startTime)
                     self.totalTimeTaken = totalElapsed
-                    if totalElapsed > 0 {
-                        self.tokensPerSecond = Double(self.globalTokenCount) / totalElapsed
-                    }
-                    self.estimatedTimeRemaining = nil
                 }
                 // Return to conservative memory usage after translation is complete
                 MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.5)
@@ -187,23 +175,12 @@ public class TranslationService {
     
     public func startBatchSession(estimatedTokens: Int) {
         self.isBatchSessionActive = true
-        self.tokensPerSecond = 0
-        self.estimatedTimeRemaining = nil
         self.totalTimeTaken = nil
         self.globalStartTime = Date()
         self.globalTokenCount = 0
-        self.globalEstimatedTokens = estimatedTokens
-        self.lastMetricsUpdateTime = nil
         self.isTranslating = true
     }
     
-    public func reduceEstimatedTokens(_ amount: Int) {
-        self.globalEstimatedTokens = max(self.globalTokenCount + 10, self.globalEstimatedTokens - amount)
-    }
-    
-    public func increaseEstimatedTokens(_ amount: Int) {
-        self.globalEstimatedTokens += amount
-    }
     
     public func endBatchSession() {
         self.isBatchSessionActive = false
@@ -211,10 +188,6 @@ public class TranslationService {
         if let startTime = self.globalStartTime {
             let totalElapsed = Date().timeIntervalSince(startTime)
             self.totalTimeTaken = totalElapsed
-            if totalElapsed > 0 {
-                self.tokensPerSecond = Double(self.globalTokenCount) / totalElapsed
-            }
-            self.estimatedTimeRemaining = nil
         }
         let physicalMemory = ProcessInfo.processInfo.physicalMemory
         MLX.Memory.cacheLimit = Int(Double(physicalMemory) * 0.5)
@@ -272,30 +245,6 @@ public class TranslationService {
                     print("--- DEBUG: Chunk \(chunkCount): [\(genText)] ---")
                 }
                 self.globalTokenCount += 1
-                if let startTime = self.globalStartTime {
-                    let now = Date()
-                    let elapsed = now.timeIntervalSince(startTime)
-                    let lastUpdate = self.lastMetricsUpdateTime ?? startTime
-                    
-                    if now.timeIntervalSince(lastUpdate) >= 1.0 {
-                        // Smoothing: Calculate speed based on recent performance (EMA or Windowed)
-                        // For simplicity, we use the total tokens / elapsed, but we could make it more sensitive
-                        let currentTokensPerSecond = Double(self.globalTokenCount) / elapsed
-                        
-                        // Apply a simple smoothing factor to avoid erratic jumps
-                        if self.tokensPerSecond == 0 {
-                            self.tokensPerSecond = currentTokensPerSecond
-                        } else {
-                            self.tokensPerSecond = (self.tokensPerSecond * 0.7) + (currentTokensPerSecond * 0.3)
-                        }
-                        
-                        let remainingTokens = max(0, self.globalEstimatedTokens - self.globalTokenCount)
-                        if self.tokensPerSecond > 0 {
-                            self.estimatedTimeRemaining = (Double(remainingTokens) / self.tokensPerSecond) + 0.5
-                        }
-                        self.lastMetricsUpdateTime = now
-                    }
-                }
 
                 let stopSequences = ["<end_of_turn>", "<eos>", "<|endoftext|>", "</s>"]
                 if stopSequences.contains(where: { genText.contains($0) }) { break }

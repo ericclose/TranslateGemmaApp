@@ -582,30 +582,13 @@ public struct TranslationView: View {
     @ViewBuilder
     private var metricsCard: some View {
         let shouldShow = (mode == .plainText && !inputText.isEmpty) || (mode == .file && !translationController.tasks.isEmpty)
-        if shouldShow && (translationService.isTranslating || translationService.tokensPerSecond > 0) {
+        if shouldShow && translationService.totalTimeTaken != nil {
             HStack(spacing: 16) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(translationService.isTranslating ? "Speed" : "Avg Speed")
+                    Text("Total Time")
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
-                    HStack(alignment: .firstTextBaseline, spacing: 2) {
-                        Text(String(format: "%.1f", translationService.tokensPerSecond))
-                            .font(.system(size: 14, weight: .bold, design: .monospaced))
-                            .foregroundColor(currentAccentColor)
-                        Text("tok/s")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(.secondary)
-                    }
-                }
-                
-                Divider()
-                    .frame(height: 20)
-                
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(translationService.isTranslating ? "ETA" : "Total Time")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(.secondary)
-                    Text(translationService.isTranslating ? formatETA(translationService.estimatedTimeRemaining) : formatETA(translationService.totalTimeTaken))
+                    Text(formatETA(translationService.totalTimeTaken))
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
                         .foregroundColor(currentAccentColor)
                 }
@@ -1002,31 +985,27 @@ struct TaskCard: View {
                         .background(Capsule().strokeBorder(.secondary.opacity(0.2), lineWidth: 1))
                     
                 case .processing:
-                    VStack(alignment: .trailing, spacing: 6) {
-                        HStack(spacing: 8) {
-                            Text(String(format: "%.1f tok/s", task.tokensPerSecond))
-                                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                                .foregroundColor(accentColor)
-                            if let eta = task.estimatedTimeRemaining, eta > 0 {
-                                Text(formatETA(eta))
+                    ProgressView()
+                        .controlSize(.small)
+                        .tint(accentColor)
+                        .frame(width: 100)
+                    
+                case .completed(let url):
+                    HStack(spacing: 12) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("Done")
+                            }
+                            .font(.system(size: 11, weight: .bold, design: .rounded))
+                            .foregroundColor(.green)
+                            
+                            if let duration = task.duration {
+                                Text(formatETA(duration))
                                     .font(.system(size: 10, weight: .medium, design: .monospaced))
                                     .foregroundColor(.secondary)
                             }
                         }
-                        ProgressView()
-                            .controlSize(.small)
-                            .tint(accentColor)
-                            .frame(width: 100)
-                    }
-                    
-                case .completed(let url):
-                    HStack(spacing: 12) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "checkmark.circle.fill")
-                            Text("Done")
-                        }
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(.green)
                         
                         Button(action: { onReveal(url) }) {
                             Image(systemName: "folder")
