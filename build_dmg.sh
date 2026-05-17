@@ -49,6 +49,26 @@ record_step "Bundle Structure Setup" "$S2_START"
 # 3. Manual Metal compilation for MLX
 echo "🔥 Step 3: Compiling Metal kernels in parallel..."
 S3_START=$(get_time)
+
+# Verify if Metal toolchain is installed/functional, download if missing
+if ! xcrun -sdk macosx metal --version >/dev/null 2>&1; then
+    echo "⚠️  Metal toolchain is missing or not installed properly."
+    echo "📥 Attempting to download and import Metal Toolchain..."
+    if [ "$CI" = "true" ] || [ -n "$GITHUB_ACTIONS" ]; then
+        sudo xcodebuild -downloadComponent MetalToolchain
+        sudo xcodebuild -runFirstLaunch
+    else
+        # Try without sudo first locally; fall back to sudo if it fails
+        if ! xcodebuild -downloadComponent MetalToolchain; then
+            echo "🔑 Download failed. Trying with sudo..."
+            sudo xcodebuild -downloadComponent MetalToolchain
+        fi
+        if ! xcodebuild -runFirstLaunch; then
+            sudo xcodebuild -runFirstLaunch
+        fi
+    fi
+fi
+
 mkdir -p build/metal_objects
 find .build/checkouts/mlx-swift -name "*.metal" -print0 | xargs -0 -n 1 -P $(sysctl -n hw.ncpu) sh -c '
     FILE="$1"
