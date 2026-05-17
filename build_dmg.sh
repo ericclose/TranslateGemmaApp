@@ -87,6 +87,7 @@ cp ".build/release/${APP_NAME}" "${APP_BUNDLE}/Contents/MacOS/"
 cp "Sources/TranslateGemmaApp/Resources/Info.plist" "${APP_BUNDLE}/Contents/"
 # Inject the chosen version into the bundle's Info.plist
 plutil -replace CFBundleShortVersionString -string "$VERSION" "${APP_BUNDLE}/Contents/Info.plist"
+cp "Sources/TranslateGemmaApp/Resources/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/"
 cp "build/default.metallib" "${APP_BUNDLE}/Contents/Resources/"
 # MLX expects it inside a specific bundle name defined in its Package.swift
 MLX_BUNDLE="${APP_BUNDLE}/Contents/Resources/mlx-swift_Cmlx.bundle"
